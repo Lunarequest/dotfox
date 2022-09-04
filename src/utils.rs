@@ -19,7 +19,7 @@ pub async fn sync(path: PathBuf) {
         );
     }
     let ignore_path = ignores.split('\n').collect::<Vec<&str>>();
-    let files = fs::read_dir(path.clone()).expect("unable to read given path");
+    let files = fs::read_dir(path).expect("unable to read given path");
     for file in files {
         match file {
             Err(e) => {

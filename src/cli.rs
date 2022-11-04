@@ -14,4 +14,8 @@ pub enum Commands {
         #[clap(value_parser)]
         path: Option<PathBuf>,
     },
+    Clone {
+        url: String,
+        path: Option<PathBuf>,
+    },
 }

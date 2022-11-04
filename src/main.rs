@@ -17,5 +17,11 @@ async fn main() {
             };
             sync(path).await;
         }
+        Commands::Clone { url, path } => {
+            let path = match path {
+                Some(path) => path,
+                None => PathBuf::from("."),
+            };
+        }
     }
 }

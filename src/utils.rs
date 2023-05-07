@@ -107,14 +107,14 @@ pub async fn sync(path: &PathBuf) {
                                     sync_config(inner_file).await;
                                 } else {
                                     let target = &home_dir.join(filename);
-                                    match symlink(inner_file, target) {
+                                    match symlink(&inner_file, target) {
                                         Ok(_) => {}
                                         Err(e) => {
                                             if e.to_string() != *"File exists (os error 17)" {
                                                 eprintln!("{e}")
                                             } else if target.is_symlink()
                                                 && canonicalize(target).unwrap()
-                                                    != canonicalize(&file_path).unwrap()
+                                                    != canonicalize(&inner_file).unwrap()
                                             {
                                                 println!(
                                                     "{} is not symlinked to {}",

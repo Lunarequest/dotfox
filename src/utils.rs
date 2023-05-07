@@ -4,10 +4,10 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     fs::{canonicalize, read_dir, read_to_string},
     os::unix::fs::symlink,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
-pub async fn clone(url: String, path: &PathBuf) {
+pub async fn clone(url: String, path: &Path) {
     let mut builder = RepoBuilder::new();
     let mut callbacks = RemoteCallbacks::new();
     let mut fetch_options = FetchOptions::new();
@@ -17,7 +17,7 @@ pub async fn clone(url: String, path: &PathBuf) {
         callbacks.credentials(|_, _, _| {
             let creds =
                 Cred::ssh_key_from_agent("git").expect("Could not create credentials object");
-            return Ok(creds);
+            Ok(creds)
         });
         fetch_options.remote_callbacks(callbacks);
     } else {
@@ -26,7 +26,7 @@ pub async fn clone(url: String, path: &PathBuf) {
 
     builder.fetch_options(fetch_options);
     builder
-        .clone(&url, path.as_path())
+        .clone(&url, path)
         .expect("failed to clone directory");
 }
 
@@ -50,18 +50,14 @@ pub async fn sync_config(path: PathBuf) {
                     Err(e) => {
                         if e.to_string() != *"File exists (os error 17)" {
                             eprintln!("{e}")
-                        } else {
-                            if target.is_symlink() {
-                                if canonicalize(target).unwrap()
-                                    != canonicalize(&file_path).unwrap()
-                                {
-                                    println!(
-                                        "{} is not symlinked to {}",
-                                        target.display(),
-                                        file_path.display()
-                                    )
-                                }
-                            }
+                        } else if target.is_symlink()
+                            && canonicalize(target).unwrap() != canonicalize(&file_path).unwrap()
+                        {
+                            println!(
+                                "{} is not symlinked to {}",
+                                target.display(),
+                                file_path.display()
+                            )
                         }
                     }
                 }
@@ -111,23 +107,20 @@ pub async fn sync(path: &PathBuf) {
                                     sync_config(inner_file).await;
                                 } else {
                                     let target = &home_dir.join(filename);
-                                    match symlink(inner_file, &target) {
+                                    match symlink(inner_file, target) {
                                         Ok(_) => {}
                                         Err(e) => {
                                             if e.to_string() != *"File exists (os error 17)" {
                                                 eprintln!("{e}")
-                                            } else {
-                                                if target.is_symlink() {
-                                                    if canonicalize(target).unwrap()
-                                                        != canonicalize(&file_path).unwrap()
-                                                    {
-                                                        println!(
-                                                            "{} is not symlinked to {}",
-                                                            target.display(),
-                                                            file_path.display()
-                                                        )
-                                                    }
-                                                }
+                                            } else if target.is_symlink()
+                                                && canonicalize(target).unwrap()
+                                                    != canonicalize(&file_path).unwrap()
+                                            {
+                                                println!(
+                                                    "{} is not symlinked to {}",
+                                                    target.display(),
+                                                    file_path.display()
+                                                )
                                             }
                                         }
                                     }

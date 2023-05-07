@@ -20,7 +20,7 @@ async fn main() {
             let path = match path {
                 Some(path) => path,
                 None => {
-                    let base = url.split("/").last().unwrap().replace(".git", "");
+                    let base = url.split('/').last().unwrap().replace(".git", "");
                     PathBuf::from(base)
                 }
             };

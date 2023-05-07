@@ -11,11 +11,15 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     Sync {
-        #[clap(value_parser)]
         path: Option<PathBuf>,
     },
     Clone {
         url: String,
+        path: Option<PathBuf>,
+    },
+    Push {
+        #[clap(short = 'm')]
+        message: String,
         path: Option<PathBuf>,
     },
 }

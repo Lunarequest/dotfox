@@ -67,7 +67,6 @@ pub async fn push(path: &Path, message: String) {
 
     let mut index = repo.index().expect("Unable to open index");
     let oid = index.write_tree().unwrap();
-    println!("{:#?}", oid);
     let signature = Signature::now("Lunarequest", "nullrequest@vivaldi.net").unwrap();
     let parent_commit = find_last_commit(&repo).unwrap();
     let tree = repo.find_tree(oid).unwrap();

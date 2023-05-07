@@ -1,8 +1,7 @@
-use std::path::PathBuf;
-
 use clap::Parser;
 use cli::Commands;
-use utils::sync;
+use std::path::PathBuf;
+use utils::{clone, sync};
 mod cli;
 mod utils;
 
@@ -15,13 +14,18 @@ async fn main() {
                 Some(path) => path,
                 None => PathBuf::from("."),
             };
-            sync(path).await;
+            sync(&path).await;
         }
         Commands::Clone { url, path } => {
             let path = match path {
                 Some(path) => path,
-                None => PathBuf::from("."),
+                None => {
+                    let base = url.split("/").last().unwrap().replace(".git", "");
+                    PathBuf::from(base)
+                }
             };
+            clone(url, &path).await;
+            sync(&path).await;
         }
     }
 }

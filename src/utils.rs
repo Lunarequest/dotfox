@@ -1,6 +1,6 @@
 use dirs::{config_dir, home_dir};
 use git2::{
-    build::RepoBuilder, Commit, Cred, Direction, FetchOptions, ObjectType, PushOptions,
+    build::RepoBuilder, Commit, Config, Cred, Direction, FetchOptions, ObjectType, PushOptions,
     RemoteCallbacks, Repository, Signature,
 };
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -25,6 +25,8 @@ fn git_push(repo: &Repository) -> Result<(), git2::Error> {
         Ok(r) => r,
         Err(_) => panic!("Unable to find remote origin"),
     };
+    let refs = remote.refspecs().next().unwrap();
+    let ref_str = refs.str().unwrap().to_string();
     let url = remote.url().unwrap();
     println!("{url}");
     if url.starts_with("git@") {
@@ -36,13 +38,10 @@ fn git_push(repo: &Repository) -> Result<(), git2::Error> {
 
         //remote.connect(Direction::Push)?;
         push_opts.remote_callbacks(callbacks);
-        remote.push(
-            &["refs/heads/mistress:refs/heads/mistress"],
-            Some(&mut push_opts),
-        )
+        remote.push(&[&ref_str], Some(&mut push_opts))
     } else {
         remote.connect(Direction::Push)?;
-        remote.push(&["refs/heads/mistress:refs/heads/mistress"], None)
+        remote.push(&[&ref_str], None)
     }
 }
 
@@ -58,6 +57,10 @@ pub async fn push(path: &Path, message: String) {
         }
     };
 
+    let config = Config::open_default().unwrap();
+    let name = config.get_str("user.name").unwrap();
+    let email = config.get_str("user.email").unwrap();
+
     set_current_dir(path).unwrap();
 
     let add = Command::new("git").arg("add").arg(".").status().unwrap();
@@ -67,7 +70,7 @@ pub async fn push(path: &Path, message: String) {
 
     let mut index = repo.index().expect("Unable to open index");
     let oid = index.write_tree().unwrap();
-    let signature = Signature::now("Lunarequest", "nullrequest@vivaldi.net").unwrap();
+    let signature = Signature::now(name, email).unwrap();
     let parent_commit = find_last_commit(&repo).unwrap();
     let tree = repo.find_tree(oid).unwrap();
     repo.commit(

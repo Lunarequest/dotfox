@@ -1,7 +1,7 @@
 use dirs::{config_dir, home_dir};
 use git2::{
     build::RepoBuilder, Commit, Config, Cred, Direction, FetchOptions, ObjectType, PushOptions,
-    RemoteCallbacks, Repository, Signature,
+    RemoteCallbacks, Repository, Signature, StatusOptions,
 };
 use gpgme::Context;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -10,7 +10,7 @@ use std::{
     fs::{canonicalize, read_dir, read_to_string},
     os::unix::fs::symlink,
     path::{Path, PathBuf},
-    process::Command,
+    process::{exit, Command},
 };
 
 fn find_last_commit(repo: &Repository) -> Result<Commit, git2::Error> {
@@ -20,8 +20,13 @@ fn find_last_commit(repo: &Repository) -> Result<Commit, git2::Error> {
 }
 
 fn get_current_branch(repo: &Repository) -> Result<String, ()> {
-    let refs = repo.branch_remote_name("HEAD").unwrap();
-    Ok(String::from_utf8_lossy(&refs).to_string())
+    let head = repo.head().unwrap();
+    if head.is_branch() {
+        let name = head.name().unwrap();
+        Ok(name.to_string())
+    } else {
+        panic!("Not on a valid git branch");
+    }
 }
 
 fn git_push(repo: &Repository) -> Result<(), git2::Error> {
@@ -32,12 +37,7 @@ fn git_push(repo: &Repository) -> Result<(), git2::Error> {
         Err(_) => panic!("Unable to find remote origin"),
     };
     let branch = get_current_branch(repo).unwrap();
-    let mut refspecs = remote.refspecs();
-    let refs = refspecs.next().unwrap();
-    let ref_str = refs.str().unwrap().to_string().replace("*", &branch);
-    println!("{ref_str}");
     let url = remote.url().unwrap();
-    println!("{url}");
     if url.starts_with("git@") {
         callbacks.credentials(|_, _, _| {
             let creds =
@@ -47,14 +47,14 @@ fn git_push(repo: &Repository) -> Result<(), git2::Error> {
 
         //remote.connect(Direction::Push)?;
         push_opts.remote_callbacks(callbacks);
-        remote.push(&[&ref_str], Some(&mut push_opts))
+        remote.push(&[&branch], Some(&mut push_opts))
     } else {
         remote.connect(Direction::Push)?;
-        remote.push(&[&ref_str], None)
+        remote.push(&[&branch], None)
     }
 }
 
-fn sign_commit_or_regular(repo: &Repository, message: &String) {
+fn sign_commit_or_regular(repo: &Repository, message: &str) {
     let config = Config::open_default().unwrap();
     let name = config.get_string("user.name").unwrap();
     let email = config.get_string("user.email").unwrap();
@@ -63,7 +63,7 @@ fn sign_commit_or_regular(repo: &Repository, message: &String) {
     let mut index = repo.index().expect("Unable to open index");
     let oid = index.write_tree().unwrap();
     let signature = Signature::now(&name, &email).unwrap();
-    let parent_commit = find_last_commit(&repo).unwrap();
+    let parent_commit = find_last_commit(repo).unwrap();
     let tree = repo.find_tree(oid).unwrap();
 
     match signing_key {
@@ -72,7 +72,7 @@ fn sign_commit_or_regular(repo: &Repository, message: &String) {
                 Some("HEAD"), //  point HEAD to our new commit
                 &signature,   // author
                 &signature,   // committer
-                &message,     // commit message
+                message,      // commit message
                 &tree,        // tree
                 &[&parent_commit],
             )
@@ -80,7 +80,7 @@ fn sign_commit_or_regular(repo: &Repository, message: &String) {
         }
         Ok(key) => {
             let commit_buf = repo
-                .commit_create_buffer(&signature, &signature, &message, &tree, &[&parent_commit])
+                .commit_create_buffer(&signature, &signature, message, &tree, &[&parent_commit])
                 .unwrap();
 
             let commit_as_string = String::from_utf8_lossy(&commit_buf).to_string();
@@ -97,7 +97,8 @@ fn sign_commit_or_regular(repo: &Repository, message: &String) {
                 Err(e) => panic!("{e}"),
                 Ok(_) => {
                     let sig = String::from_utf8(output).unwrap();
-                    repo.commit_signed(&commit_as_string, &sig, None).unwrap();
+                    let oid = repo.commit_signed(&commit_as_string, &sig, None).unwrap();
+                    repo.head().unwrap().set_target(oid, "REFLOG_MSG").unwrap();
                 }
             }
         }
@@ -121,6 +122,15 @@ pub async fn push(path: &Path, message: String) {
     let add = Command::new("git").arg("add").arg(".").status().unwrap();
     if !add.success() {
         panic!("git add failed");
+    }
+
+    let mut status_opts = StatusOptions::default();
+
+    let statuses = repo.statuses(Some(&mut status_opts)).unwrap();
+
+    if statuses.is_empty() {
+        eprintln!("No files to commit");
+        exit(1);
     }
 
     sign_commit_or_regular(&repo, &message);

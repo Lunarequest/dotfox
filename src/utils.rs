@@ -3,6 +3,7 @@ use git2::{
     build::RepoBuilder, Commit, Config, Cred, Direction, FetchOptions, ObjectType, PushOptions,
     RemoteCallbacks, Repository, Signature,
 };
+use gpgme::Context;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     env::set_current_dir,
@@ -18,6 +19,11 @@ fn find_last_commit(repo: &Repository) -> Result<Commit, git2::Error> {
         .map_err(|_| git2::Error::from_str("Couldn't find commit"))
 }
 
+fn get_current_branch(repo: &Repository) -> Result<String, ()> {
+    let refs = repo.branch_remote_name("HEAD").unwrap();
+    Ok(String::from_utf8_lossy(&refs).to_string())
+}
+
 fn git_push(repo: &Repository) -> Result<(), git2::Error> {
     let mut callbacks = RemoteCallbacks::new();
     let mut push_opts = PushOptions::new();
@@ -25,8 +31,11 @@ fn git_push(repo: &Repository) -> Result<(), git2::Error> {
         Ok(r) => r,
         Err(_) => panic!("Unable to find remote origin"),
     };
-    let refs = remote.refspecs().next().unwrap();
-    let ref_str = refs.str().unwrap().to_string();
+    let branch = get_current_branch(repo).unwrap();
+    let mut refspecs = remote.refspecs();
+    let refs = refspecs.next().unwrap();
+    let ref_str = refs.str().unwrap().to_string().replace("*", &branch);
+    println!("{ref_str}");
     let url = remote.url().unwrap();
     println!("{url}");
     if url.starts_with("git@") {
@@ -45,6 +54,56 @@ fn git_push(repo: &Repository) -> Result<(), git2::Error> {
     }
 }
 
+fn sign_commit_or_regular(repo: &Repository, message: &String) {
+    let config = Config::open_default().unwrap();
+    let name = config.get_string("user.name").unwrap();
+    let email = config.get_string("user.email").unwrap();
+    let signing_key = config.get_string("user.signingkey");
+
+    let mut index = repo.index().expect("Unable to open index");
+    let oid = index.write_tree().unwrap();
+    let signature = Signature::now(&name, &email).unwrap();
+    let parent_commit = find_last_commit(&repo).unwrap();
+    let tree = repo.find_tree(oid).unwrap();
+
+    match signing_key {
+        Err(_) => {
+            repo.commit(
+                Some("HEAD"), //  point HEAD to our new commit
+                &signature,   // author
+                &signature,   // committer
+                &message,     // commit message
+                &tree,        // tree
+                &[&parent_commit],
+            )
+            .unwrap(); // parents
+        }
+        Ok(key) => {
+            let commit_buf = repo
+                .commit_create_buffer(&signature, &signature, &message, &tree, &[&parent_commit])
+                .unwrap();
+
+            let commit_as_string = String::from_utf8_lossy(&commit_buf).to_string();
+            let mut ctx = Context::from_protocol(gpgme::Protocol::OpenPgp).unwrap();
+
+            ctx.set_armor(true);
+            let gpg_key = ctx.get_secret_key(key).unwrap();
+            ctx.add_signer(&gpg_key).unwrap();
+
+            let mut output = Vec::new();
+            let sig = ctx.sign_detached(commit_as_string.clone(), &mut output);
+
+            match sig {
+                Err(e) => panic!("{e}"),
+                Ok(_) => {
+                    let sig = String::from_utf8(output).unwrap();
+                    repo.commit_signed(&commit_as_string, &sig, None).unwrap();
+                }
+            }
+        }
+    }
+}
+
 pub async fn push(path: &Path, message: String) {
     let repo = match Repository::open(path) {
         Ok(repo) => repo,
@@ -57,10 +116,6 @@ pub async fn push(path: &Path, message: String) {
         }
     };
 
-    let config = Config::open_default().unwrap();
-    let name = config.get_str("user.name").unwrap();
-    let email = config.get_str("user.email").unwrap();
-
     set_current_dir(path).unwrap();
 
     let add = Command::new("git").arg("add").arg(".").status().unwrap();
@@ -68,20 +123,7 @@ pub async fn push(path: &Path, message: String) {
         panic!("git add failed");
     }
 
-    let mut index = repo.index().expect("Unable to open index");
-    let oid = index.write_tree().unwrap();
-    let signature = Signature::now(name, email).unwrap();
-    let parent_commit = find_last_commit(&repo).unwrap();
-    let tree = repo.find_tree(oid).unwrap();
-    repo.commit(
-        Some("HEAD"), //  point HEAD to our new commit
-        &signature,   // author
-        &signature,   // committer
-        &message,     // commit message
-        &tree,        // tree
-        &[&parent_commit],
-    )
-    .unwrap(); // parents
+    sign_commit_or_regular(&repo, &message);
     git_push(&repo).unwrap();
 }
 

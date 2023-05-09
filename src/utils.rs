@@ -18,26 +18,33 @@ fn find_last_commit(repo: &Repository) -> Result<Commit, git2::Error> {
     obj.into_commit()
         .map_err(|_| git2::Error::from_str("Couldn't find commit"))
 }
-
-fn get_current_branch(repo: &Repository) -> Result<String, ()> {
-    let head = repo.head().unwrap();
+//exit code 2 manes that it was not able to resolve the branch name
+fn get_current_branch(repo: &Repository) -> Result<String, git2::Error> {
+    let head = repo.head()?;
     if head.is_branch() {
-        let name = head.name().unwrap();
+        let name = match head.name() {
+            Some(name) => name,
+            None => {
+                eprintln!("failed to resolve branch name");
+                exit(2)
+            }
+        };
         Ok(name.to_string())
     } else {
-        panic!("Not on a valid git branch");
+        eprintln!("Not on a valid git branch");
+        exit(9);
     }
 }
-
 fn git_push(repo: &Repository) -> Result<(), git2::Error> {
     let mut callbacks = RemoteCallbacks::new();
     let mut push_opts = PushOptions::new();
-    let mut remote = match repo.find_remote("origin") {
-        Ok(r) => r,
-        Err(_) => panic!("Unable to find remote origin"),
-    };
-    let branch = get_current_branch(repo).unwrap();
-    let url = remote.url().unwrap();
+    let mut remote = repo
+        .find_remote("origin")
+        .map_err(|_| git2::Error::from_str("failed to resolve remote origin"))?;
+    let branch = get_current_branch(repo)?;
+    let url = remote
+        .url()
+        .ok_or(git2::Error::from_str("Unable to get remote url"))?;
     if url.starts_with("git@") {
         callbacks.credentials(|_, _, _| {
             let creds =
@@ -55,50 +62,204 @@ fn git_push(repo: &Repository) -> Result<(), git2::Error> {
 }
 
 fn sign_commit_or_regular(repo: &Repository, message: &str) {
-    let config = Config::open_default().unwrap();
-    let name = config.get_string("user.name").unwrap();
-    let email = config.get_string("user.email").unwrap();
+    let config = match Config::open_default() {
+        Ok(conf) => conf,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("Unable to open .gitconfig");
+            exit(3);
+        }
+    };
+
+    let name = match config.get_string("user.name") {
+        Ok(name) => name,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("Missing name from git field, I need you to tell me who you are using git");
+            exit(4);
+        }
+    };
+    let email = match config.get_string("user.email") {
+        Ok(email) => email,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("Missing email from git field, I need you to tell me who you are using git");
+            exit(4);
+        }
+    };
     let signing_key = config.get_string("user.signingkey");
 
     let mut index = repo.index().expect("Unable to open index");
-    let oid = index.write_tree().unwrap();
-    let signature = Signature::now(&name, &email).unwrap();
-    let parent_commit = find_last_commit(repo).unwrap();
-    let tree = repo.find_tree(oid).unwrap();
+    let oid = match index.write_tree() {
+        Ok(oid) => oid,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("failed to write tree");
+            exit(5);
+        }
+    };
+    let signature = match Signature::now(&name, &email) {
+        Ok(sig) => sig,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("failed to create signature");
+            exit(6);
+        }
+    };
+    let parent_commit = match find_last_commit(repo) {
+        Ok(parent) => parent,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("failed to find parent commit");
+            exit(7);
+        }
+    };
+    let tree = match repo.find_tree(oid) {
+        Ok(oid) => oid,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("failed to find commit in tree");
+            exit(8);
+        }
+    };
 
     match signing_key {
         Err(_) => {
-            repo.commit(
+            match repo.commit(
                 Some("HEAD"), //  point HEAD to our new commit
                 &signature,   // author
                 &signature,   // committer
                 message,      // commit message
                 &tree,        // tree
                 &[&parent_commit],
-            )
-            .unwrap(); // parents
+            ) {
+                Ok(_) => {}
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("{e}");
+
+                    println!("failed to commit");
+                    exit(9);
+                }
+            }
         }
         Ok(key) => {
-            let commit_buf = repo
-                .commit_create_buffer(&signature, &signature, message, &tree, &[&parent_commit])
-                .unwrap();
+            let commit_as_string = match repo.commit_create_buffer(
+                &signature,
+                &signature,
+                message,
+                &tree,
+                &[&parent_commit],
+            ) {
+                Ok(commit) => String::from_utf8_lossy(&commit).to_string(),
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("{e}");
 
-            let commit_as_string = String::from_utf8_lossy(&commit_buf).to_string();
-            let mut ctx = Context::from_protocol(gpgme::Protocol::OpenPgp).unwrap();
+                    println!("failed to create buffer commit");
+                    exit(9);
+                }
+            };
+
+            let mut ctx = match Context::from_protocol(gpgme::Protocol::OpenPgp) {
+                Ok(ctx) => ctx,
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("{e}");
+
+                    println!("Openpgp contexted failed to initzalize");
+                    exit(10);
+                }
+            };
 
             ctx.set_armor(true);
-            let gpg_key = ctx.get_secret_key(key).unwrap();
-            ctx.add_signer(&gpg_key).unwrap();
+            let gpg_key = match ctx.get_secret_key(&key) {
+                Ok(key) => key,
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("{e}");
+
+                    eprintln!("Secret key for {key} could not be accessed does it exist?");
+                    exit(10);
+                }
+            };
+
+            match ctx.add_signer(&gpg_key) {
+                Ok(_) => (),
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("{e}");
+
+                    eprintln!("could not add key as signer");
+                    exit(10);
+                }
+            };
 
             let mut output = Vec::new();
-            let sig = ctx.sign_detached(commit_as_string.clone(), &mut output);
 
-            match sig {
-                Err(e) => panic!("{e}"),
+            match ctx.sign_detached(commit_as_string.clone(), &mut output) {
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("{e}");
+
+                    eprintln!("failed to sign commit");
+                    exit(1);
+                }
                 Ok(_) => {
-                    let sig = String::from_utf8(output).unwrap();
-                    let oid = repo.commit_signed(&commit_as_string, &sig, None).unwrap();
-                    repo.head().unwrap().set_target(oid, "REFLOG_MSG").unwrap();
+                    let sig = match String::from_utf8(output) {
+                        Ok(sig) => sig,
+                        Err(e) => {
+                            #[cfg(debug_assertions)]
+                            eprintln!("{e}");
+
+                            eprintln!("Failed to conert signature to string from bytes");
+                            exit(1);
+                        }
+                    };
+                    let oid = match repo.commit_signed(&commit_as_string, &sig, None) {
+                        Ok(oid) => oid,
+                        Err(e) => {
+                            #[cfg(debug_assertions)]
+                            eprintln!("{e}");
+
+                            eprintln!("failed to create signed commit");
+                            exit(9);
+                        }
+                    };
+                    let head = repo.head();
+                    match head {
+                        Ok(mut head) => match head.set_target(oid, "REFLOG_MSG") {
+                            Ok(_) => {}
+                            Err(e) => {
+                                #[cfg(debug_assertions)]
+                                eprintln!("{e}");
+
+                                eprintln!("failed to point HEAD to latest commit");
+                                exit(9);
+                            }
+                        },
+                        Err(e) => {
+                            #[cfg(debug_assertions)]
+                            eprintln!("{e}");
+
+                            eprintln!("failed to get HEAD");
+                            exit(9);
+                        }
+                    }
                 }
             }
         }
@@ -109,24 +270,56 @@ pub async fn push(path: &Path, message: String) {
     let repo = match Repository::open(path) {
         Ok(repo) => repo,
         Err(e) => {
-            panic!(
-                "unable to open repo {} is it really a git repo?\n{}",
-                path.display(),
-                e
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!(
+                "unable to open repo {} is it really a git repo?",
+                path.display()
             );
+            exit(9);
         }
     };
 
-    set_current_dir(path).unwrap();
+    match set_current_dir(path) {
+        Ok(()) => {}
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
 
-    let add = Command::new("git").arg("add").arg(".").status().unwrap();
+            eprintln!("failed to get set current directory");
+            exit(1);
+        }
+    };
+
+    let add = match Command::new("git").arg("add").arg(".").status() {
+        Ok(status) => status,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("failed to run git add");
+            exit(1);
+        }
+    };
+
     if !add.success() {
-        panic!("git add failed");
+        eprintln!("git add failed");
+        exit(1);
     }
 
     let mut status_opts = StatusOptions::default();
 
-    let statuses = repo.statuses(Some(&mut status_opts)).unwrap();
+    let statuses = match repo.statuses(Some(&mut status_opts)) {
+        Ok(statuses) => statuses,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("failed to get status of files in repo");
+            exit(9);
+        }
+    };
 
     if statuses.is_empty() {
         eprintln!("No files to commit");
@@ -134,7 +327,16 @@ pub async fn push(path: &Path, message: String) {
     }
 
     sign_commit_or_regular(&repo, &message);
-    git_push(&repo).unwrap();
+    match git_push(&repo) {
+        Ok(_) => {}
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("failed to push changes, commit has been made.");
+            exit(9);
+        }
+    }
 }
 
 pub async fn clone(url: String, path: &Path) {
@@ -163,7 +365,10 @@ pub async fn clone(url: String, path: &Path) {
 pub async fn sync_config(path: PathBuf) {
     let config_dir = match config_dir() {
         Some(config) => config,
-        None => panic!("unable to resolve xdgconfig direcotry"),
+        None => {
+            eprintln!("Unable to resolve xdg-config");
+            exit(1);
+        }
     };
     let files = read_dir(path).expect("unable to read given path");
     for file in files {
@@ -180,14 +385,34 @@ pub async fn sync_config(path: PathBuf) {
                     Err(e) => {
                         if e.to_string() != *"File exists (os error 17)" {
                             eprintln!("{e}")
-                        } else if target.is_symlink()
-                            && canonicalize(target).unwrap() != canonicalize(&file_path).unwrap()
-                        {
-                            println!(
-                                "{} is not symlinked to {}",
-                                target.display(),
-                                file_path.display()
-                            )
+                        } else if target.is_symlink() {
+                            let target = match canonicalize(target) {
+                                Ok(target) => target,
+                                Err(_) => {
+                                    #[cfg(debug_assertions)]
+                                    eprintln!("{e}");
+
+                                    eprintln!("failed to canoncalize path");
+                                    exit(11);
+                                }
+                            };
+                            let source = match canonicalize(&file_path) {
+                                Ok(target) => target,
+                                Err(_) => {
+                                    #[cfg(debug_assertions)]
+                                    eprintln!("{e}");
+
+                                    eprintln!("failed to canoncalize path");
+                                    exit(11);
+                                }
+                            };
+                            if source != target {
+                                println!(
+                                    "{} is not symlinked to {}",
+                                    target.display(),
+                                    file_path.display()
+                                )
+                            }
                         }
                     }
                 }
@@ -199,7 +424,10 @@ pub async fn sync_config(path: PathBuf) {
 pub async fn sync(path: &PathBuf) {
     let home_dir = match home_dir() {
         Some(home) => home,
-        None => panic!("unable to resolve home direcotry"),
+        None => {
+            eprintln!("unable to resolve home direcotry");
+            exit(1);
+        }
     };
     let ignore_file_path = path.join(PathBuf::from(".foxignore"));
     let mut ignores = String::from("\n.git\n.github");
@@ -242,15 +470,34 @@ pub async fn sync(path: &PathBuf) {
                                         Err(e) => {
                                             if e.to_string() != *"File exists (os error 17)" {
                                                 eprintln!("{e}")
-                                            } else if target.is_symlink()
-                                                && canonicalize(target).unwrap()
-                                                    != canonicalize(&inner_file).unwrap()
-                                            {
-                                                println!(
-                                                    "{} is not symlinked to {}",
-                                                    target.display(),
-                                                    file_path.display()
-                                                )
+                                            } else if target.is_symlink() {
+                                                let target = match canonicalize(target) {
+                                                    Ok(target) => target,
+                                                    Err(_) => {
+                                                        #[cfg(debug_assertions)]
+                                                        eprintln!("{e}");
+
+                                                        eprintln!("failed to canoncalize path");
+                                                        exit(11);
+                                                    }
+                                                };
+                                                let source = match canonicalize(&file_path) {
+                                                    Ok(target) => target,
+                                                    Err(_) => {
+                                                        #[cfg(debug_assertions)]
+                                                        eprintln!("{e}");
+
+                                                        eprintln!("failed to canoncalize path");
+                                                        exit(11);
+                                                    }
+                                                };
+                                                if source != target {
+                                                    println!(
+                                                        "{} is not symlinked to {}",
+                                                        target.display(),
+                                                        file_path.display()
+                                                    )
+                                                }
                                             }
                                         }
                                     }

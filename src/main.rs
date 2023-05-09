@@ -1,6 +1,6 @@
 use clap::Parser;
 use cli::Commands;
-use std::path::PathBuf;
+use std::{path::PathBuf, process::exit};
 use utils::{clone, push, sync};
 mod cli;
 mod utils;
@@ -20,7 +20,13 @@ async fn main() {
             let path = match path {
                 Some(path) => path,
                 None => {
-                    let base = url.split('/').last().unwrap().replace(".git", "");
+                    let base = match url.split('/').last() {
+                        Some(s) => s.replace(".git", ""),
+                        None => {
+                            eprintln!("not valid url");
+                            exit(1);
+                        }
+                    };
                     PathBuf::from(base)
                 }
             };
@@ -30,7 +36,14 @@ async fn main() {
         Commands::Push { message, path } => {
             let path = match path {
                 Some(path) => path,
-                None => PathBuf::from(".").canonicalize().unwrap(),
+                None => match PathBuf::from(".").canonicalize() {
+                    Ok(path) => path,
+                    Err(e) => {
+                        #[cfg(debug_assertions)]
+                        eprintln!("{e}");
+                        exit(1);
+                    }
+                },
             };
             push(&path, message).await;
         }

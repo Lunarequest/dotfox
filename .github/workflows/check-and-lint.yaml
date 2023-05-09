@@ -13,6 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt install -y libgpgme-dev
       - run: cargo check
 
   fmt:
@@ -23,6 +24,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      - run: sudo apt install -y libgpgme-dev
       - run: cargo fmt --all -- --check
 
   clippy:
@@ -33,4 +35,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - run: sudo apt install -y libgpgme-dev
       - run: cargo clippy --all-features

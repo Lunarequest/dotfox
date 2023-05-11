@@ -12,9 +12,9 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    #[clap(about = "sync repo to home directory")]
-    Sync {
-        #[clap(help = "path to repo, optional defaults to current dir")]
+    #[clap(about = "Init a directory for dotfox")]
+    Init {
+        #[clap(help = "path to repo, defaults to current dir")]
         path: Option<PathBuf>,
     },
     #[clap(about = "Clone a git repoistory and sync files to home dir")]
@@ -22,6 +22,11 @@ pub enum Commands {
         #[clap(help = "url of repoistory")]
         url: String,
         #[clap(help = "path to repo, defaults to repositry name")]
+        path: Option<PathBuf>,
+    },
+    #[clap(about = "sync repo to home directory")]
+    Sync {
+        #[clap(help = "path to repo, optional defaults to current dir")]
         path: Option<PathBuf>,
     },
     #[clap(about = "commit and push changes")]

@@ -1,7 +1,8 @@
 [package]
 name = "dotfox"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
+homepage = "https://github.com/Lunarequest/dotfox/"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -17,3 +18,6 @@ lto = true
 opt-level = "z"
 codegen-units = 1
 panic = "abort"
+
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=+crt-static"]

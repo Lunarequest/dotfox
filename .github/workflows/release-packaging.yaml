@@ -2,6 +2,8 @@ on:
   push:
     branches:
       - mistress
+    tags:
+      - "v*.*.*"
 
 name: Release Packaging
 
@@ -11,14 +13,33 @@ jobs:
     env:
       PROJECT_NAME: blog
     runs-on: ubuntu-latest
+    container:
+      image: rust:alpine
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-      - run: sudo apt install -y libgpgme-dev
+      
+      - name: install deps
+        run: apk update && apk add musl-dev gpgme-dev openssl-dev openssl-libs-static libgit2-dev libgit2-static zlib-dev zlib-static
+      
       - name: Release Build
         run: cargo build --release
-      - name: 'Upload Artifact'
-        uses: actions/upload-artifact@v3
+        env:
+          OPENSSL_STATIC: "1"
+          OPENSSL_LIB_DIR: /usr/lib
+          OPENSSL_INCLUDE_DIR: /usr/include/openssl
+          ZLIB_STATIC: "1"
+          ZLIB_LIB_DIR: /usr/lib
+          ZLIB_INCLUDE_DIR: /usr/include/
+          LIBGIT2_STATIC: "1"
+          GPGME_STATIC: "1"
+          GPGME_LIB_DIR: /usr/lib
+          GPGME_INCLUDE: /usr/include/gpgme
+
+      - name: Publish
+        id: publishing
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: dotfox
-          path: target/release/dotfox
+          files: |
+           target/release/dotfox
+          draft: true

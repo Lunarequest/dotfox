@@ -37,9 +37,11 @@ fn main() {
                 Some(path) => path,
                 None => match PathBuf::from(".").canonicalize() {
                     Ok(path) => path,
-                    Err(e) => {
+                    Err(_e) => {
                         #[cfg(debug_assertions)]
-                        eprintln!("{e}");
+                        eprintln!("{_e}");
+
+                        eprintln!("failed to canonicalize url");
                         exit(1);
                     }
                 },

@@ -1,7 +1,7 @@
 use dirs::{config_dir, home_dir};
 use git2::{
-    build::RepoBuilder, Commit, Config, Cred, Direction, FetchOptions, ObjectType, PushOptions,
-    RemoteCallbacks, Repository, Signature, StatusOptions,
+    build::RepoBuilder, Commit, Config, Cred, Direction, FetchOptions, IndexAddOption, ObjectType,
+    PushOptions, RemoteCallbacks, Repository, Signature, StatusOptions,
 };
 use gpgme::Context;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -10,7 +10,7 @@ use std::{
     fs::{canonicalize, read_dir, read_to_string},
     os::unix::fs::symlink,
     path::{Path, PathBuf},
-    process::{exit, Command},
+    process::exit,
 };
 
 fn find_last_commit(repo: &Repository) -> Result<Commit, git2::Error> {
@@ -58,6 +58,40 @@ fn git_push(repo: &Repository) -> Result<(), git2::Error> {
     } else {
         remote.connect(Direction::Push)?;
         remote.push(&[&branch], None)
+    }
+}
+
+fn git_add(repo: &Repository) {
+    let mut index = match repo.index() {
+        Ok(index) => index,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("failed to get image");
+            exit(9);
+        }
+    };
+
+    match index.add_all(["."].into_iter(), IndexAddOption::DEFAULT, None) {
+        Ok(_) => (),
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("failed to add files to repo");
+            exit(1);
+        }
+    }
+    match index.write() {
+        Ok(_) => {}
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{e}");
+
+            eprintln!("failed to add files to repo");
+            exit(1);
+        }
     }
 }
 
@@ -292,21 +326,7 @@ pub async fn push(path: &Path, message: String) {
         }
     };
 
-    let add = match Command::new("git").arg("add").arg(".").status() {
-        Ok(status) => status,
-        Err(e) => {
-            #[cfg(debug_assertions)]
-            eprintln!("{e}");
-
-            eprintln!("failed to run git add");
-            exit(1);
-        }
-    };
-
-    if !add.success() {
-        eprintln!("git add failed");
-        exit(1);
-    }
+    git_add(&repo);
 
     let mut status_opts = StatusOptions::default();
 

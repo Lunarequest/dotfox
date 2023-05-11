@@ -26,7 +26,7 @@ pub enum Commands {
     },
     #[clap(about = "commit and push changes")]
     Push {
-        #[clap(short = 'm',long="message", help = "message for commit")]
+        #[clap(short = 'm', long = "message", help = "message for commit")]
         message: String,
         #[clap(help = "path to repo, optional defaults to current dir")]
         path: Option<PathBuf>,

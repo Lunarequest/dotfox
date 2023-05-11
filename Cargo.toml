@@ -18,6 +18,3 @@ lto = true
 opt-level = "z"
 codegen-units = 1
 panic = "abort"
-
-[target.x86_64-unknown-linux-musl]
-rustflags = ["-C", "target-feature=+crt-static"]

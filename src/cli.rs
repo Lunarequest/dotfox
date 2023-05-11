@@ -1,8 +1,10 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[derive(Debug, Parser)]
-#[clap(author="Luna D. Dragon", version="1.0.0", about="My cli tool to manage dotfiles", long_about = None)]
+#[clap(author="Luna D. Dragon", version=VERSION, about="My cli tool to manage dotfiles", long_about = None)]
 pub struct Cli {
     #[clap(subcommand)]
     pub command: Commands,

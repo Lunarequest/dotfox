@@ -300,7 +300,7 @@ fn sign_commit_or_regular(repo: &Repository, message: &str) {
     }
 }
 
-pub async fn push(path: &Path, message: String) {
+pub fn push(path: &Path, message: String) {
     let repo = match Repository::open(path) {
         Ok(repo) => repo,
         Err(e) => {
@@ -359,7 +359,7 @@ pub async fn push(path: &Path, message: String) {
     }
 }
 
-pub async fn clone(url: String, path: &Path) {
+pub fn clone(url: String, path: &Path) {
     let mut builder = RepoBuilder::new();
     let mut callbacks = RemoteCallbacks::new();
     let mut fetch_options = FetchOptions::new();
@@ -382,7 +382,7 @@ pub async fn clone(url: String, path: &Path) {
         .expect("failed to clone directory");
 }
 
-pub async fn sync_config(path: PathBuf) {
+pub fn sync_config(path: PathBuf) {
     let config_dir = match config_dir() {
         Some(config) => config,
         None => {
@@ -441,7 +441,7 @@ pub async fn sync_config(path: PathBuf) {
     }
 }
 
-pub async fn sync(path: &PathBuf) {
+pub fn sync(path: &PathBuf) {
     let home_dir = match home_dir() {
         Some(home) => home,
         None => {
@@ -482,7 +482,7 @@ pub async fn sync(path: &PathBuf) {
                                 let filename = inner_file.file_name();
                                 let inner_file = inner_file.path();
                                 if inner_file.as_os_str().to_string_lossy().contains(".config") {
-                                    sync_config(inner_file).await;
+                                    sync_config(inner_file);
                                 } else {
                                     let target = &home_dir.join(filename);
                                     match symlink(&inner_file, target) {

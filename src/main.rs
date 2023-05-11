@@ -5,8 +5,7 @@ use utils::{clone, push, sync};
 mod cli;
 mod utils;
 
-#[tokio::main(flavor = "multi_thread")]
-async fn main() {
+fn main() {
     let cli = cli::Cli::parse();
     match cli.command {
         Commands::Sync { path } => {
@@ -14,7 +13,7 @@ async fn main() {
                 Some(path) => path,
                 None => PathBuf::from("."),
             };
-            sync(&path).await;
+            sync(&path);
         }
         Commands::Clone { url, path } => {
             let path = match path {
@@ -30,8 +29,8 @@ async fn main() {
                     PathBuf::from(base)
                 }
             };
-            clone(url, &path).await;
-            sync(&path).await;
+            clone(url, &path);
+            sync(&path);
         }
         Commands::Push { message, path } => {
             let path = match path {
@@ -45,7 +44,7 @@ async fn main() {
                     }
                 },
             };
-            push(&path, message).await;
+            push(&path, message);
         }
     }
 }

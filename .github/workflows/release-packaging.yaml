@@ -39,7 +39,7 @@ jobs:
         if: github.ref == 'refs/heads/mistress'
         with:
           name: dotfox
-          path: target/release/dotfox
+          path: target/x86_64-unknown-linux-musl/release/dotfox
 
       - name: Publish
         id: publishing
@@ -47,5 +47,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           files: |
-           target/release/dotfox
+           target/x86_64-unknown-linux-musl/release/dotfox
           draft: true

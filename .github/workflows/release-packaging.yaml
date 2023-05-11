@@ -35,10 +35,16 @@ jobs:
           GPGME_LIB_DIR: /usr/lib
           GPGME_INCLUDE: /usr/include/gpgme
 
+      - uses: actions/upload-artifact@v3
+        if: github.ref == 'refs/heads/mistress'
+        with:
+          name: dotfox
+          path: target/release/dotfox
+
       - name: Publish
         id: publishing
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
           files: |
            target/release/dotfox

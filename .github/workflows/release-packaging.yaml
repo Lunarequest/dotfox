@@ -6,6 +6,9 @@ on:
       - "v*.*.*"
 
 name: Release Packaging
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   release:
@@ -19,7 +22,9 @@ jobs:
       - uses: actions/checkout@v3
       
       - name: install deps
-        run: apk update && apk add musl-dev gpgme-dev openssl-dev openssl-libs-static libgit2-dev libgit2-static zlib-dev zlib-static
+        run: apk update && apk add musl-dev gpgme-dev gpgme-static openssl-dev openssl-libs-static libgit2-dev libgit2-static zlib-dev zlib-static
+
+      - uses: Swatinem/rust-cache@v1
       
       - name: Release Build
         run: cargo build --release --target=x86_64-unknown-linux-musl
@@ -31,9 +36,7 @@ jobs:
           ZLIB_LIB_DIR: /usr/lib
           ZLIB_INCLUDE_DIR: /usr/include/
           LIBGIT2_STATIC: "1"
-          GPGME_STATIC: "1"
-          GPGME_LIB_DIR: /usr/lib
-          GPGME_INCLUDE: /usr/include/gpgme
+          SYSTEM_DEPS_LINK: static
 
       - uses: actions/upload-artifact@v3
         if: github.ref == 'refs/heads/mistress'

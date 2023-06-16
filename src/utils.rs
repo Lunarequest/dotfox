@@ -1,13 +1,14 @@
 use super::{
+    config::Config,
     git::{add, commit, push},
-    resolve_dir,
 };
 use dirs::{config_dir, home_dir};
 use git2::{build::RepoBuilder, Cred, FetchOptions, RemoteCallbacks, Repository, StatusOptions};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use serde_json::from_reader;
+
 use std::{
     env::set_current_dir,
-    fs::{read_dir, read_to_string},
+    fs::{read_dir, OpenOptions},
     os::unix::fs::symlink,
     path::{Path, PathBuf},
     process::exit,
@@ -114,13 +115,15 @@ pub fn sync_config(path: PathBuf) {
                 let filename = file.file_name();
                 let target = &config_dir.join(&filename);
                 match symlink(&file_path, target) {
-                    Ok(_) => {}
+                    Ok(_) => {
+                        println!("{} -> {}", target.display(), file_path.display());
+                    }
                     Err(_e) => {
                         if _e.to_string() != *"File exists (os error 17)" {
                             eprintln!("{_e}")
                         } else if target.is_symlink() {
-                            let target = resolve_dir(Some(target.to_owned()));
-                            let source = resolve_dir(Some(file_path.to_owned()));
+                            let target = target.canonicalize().unwrap();
+                            let source = file_path.canonicalize().unwrap();
                             if source != target {
                                 println!(
                                     "{} is not symlinked to {}",
@@ -144,60 +147,65 @@ pub fn sync(path: &PathBuf) {
             exit(1);
         }
     };
-    let ignore_file_path = path.join(PathBuf::from(".foxignore"));
-    let mut ignores = String::from("\n.git\n.github");
-    if ignore_file_path.exists() && ignore_file_path.is_file() {
-        ignores.push_str(
-            read_to_string(ignore_file_path)
-                .expect("unable to read .foxignore file")
-                .as_str(),
-        );
+    let config_path = path.join("dotfox.json");
+
+    if !config_path.exists() || config_path.is_dir() {
+        eprintln!("Missing config");
+        exit(78);
     }
-    let ignore_path = ignores.split('\n').collect::<Vec<&str>>();
-    let files = read_dir(path).expect("unable to read given path");
-    for file in files {
-        match file {
-            Err(_e) => {
-                eprintln!("{_e}");
-            }
-            Ok(file) => {
-                let file_path = file.path();
-                let file_as_string = file_path.to_string_lossy();
-                if !ignore_path
-                    .par_iter()
-                    .any(|&i| file_as_string.contains(i) && !i.is_empty())
-                    && file_path.is_dir()
-                {
-                    let inner_paths =
-                        read_dir(&file_path).expect("unable to read inner direcotries");
-                    for inner_file in inner_paths {
-                        match inner_file {
-                            Err(_e) => eprintln!("{_e}"),
-                            Ok(inner_file) => {
-                                let filename = inner_file.file_name();
-                                let inner_file = inner_file.path();
-                                if inner_file.as_os_str().to_string_lossy().contains(".config") {
-                                    sync_config(inner_file);
-                                } else {
-                                    let target = &home_dir.join(filename);
-                                    match symlink(&inner_file, target) {
-                                        Ok(_) => {}
-                                        Err(_e) => {
-                                            if _e.to_string() != *"File exists (os error 17)" {
-                                                eprintln!("{_e}")
-                                            } else if target.is_symlink() {
-                                                let target = resolve_dir(Some(target.to_owned()));
-                                                let source =
-                                                    resolve_dir(Some(file_path.to_owned()));
-                                                if source != target {
-                                                    println!(
-                                                        "{} is not symlinked to {}",
-                                                        target.display(),
-                                                        file_path.display()
-                                                    )
-                                                }
-                                            }
-                                        }
+
+    let config_reader = match OpenOptions::new().read(true).open(config_path) {
+        Ok(reader) => reader,
+        Err(e) => {
+            eprintln!("failed to read config.\n{e}");
+            exit(71);
+        }
+    };
+
+    let config: Config = match from_reader(config_reader) {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("Failed to Deseralize config\n{e}");
+            exit(78);
+        }
+    };
+
+    let files = config.folders();
+
+    for dir in files {
+        let dir = path.join(dir);
+        if !dir.is_dir() {
+            eprintln!("Path {} is not a direcotory", dir.display());
+            exit(1);
+        }
+        let in_files = read_dir(dir).unwrap();
+
+        for inner_file in in_files {
+            match inner_file {
+                Err(_e) => eprintln!("{_e}"),
+                Ok(file) => {
+                    let filename = file.file_name();
+                    let file = file.path();
+                    if filename == *".config" {
+                        sync_config(file);
+                    } else {
+                        let target = &home_dir.join(filename);
+                        match symlink(&file, target) {
+                            Ok(_) => {
+                                println!("{} -> {}", target.display(), file.display());
+                            }
+                            Err(e) => {
+                                if e.to_string() != *"File exists (os error 17)" {
+                                    eprintln!("{e}")
+                                } else if target.is_symlink() {
+                                    let target = target.canonicalize().unwrap();
+                                    let source = file.canonicalize().unwrap();
+                                    if source != target {
+                                        println!(
+                                            "{} is not symlinked to {}",
+                                            target.display(),
+                                            file.display()
+                                        )
                                     }
                                 }
                             }

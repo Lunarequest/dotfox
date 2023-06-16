@@ -1,9 +1,14 @@
 use clap::Parser;
 use cli::Commands;
 use git2::Repository;
-use std::{fs::create_dir_all, path::PathBuf, process::exit};
+use std::{
+    fs::{create_dir_all, read_link},
+    path::PathBuf,
+    process::exit,
+};
 use utils::{clone, push, sync};
 mod cli;
+mod config;
 mod git;
 mod utils;
 
@@ -11,12 +16,27 @@ fn resolve_dir(path: Option<PathBuf>) -> PathBuf {
     match path {
         Some(path) => path,
         None => match PathBuf::from(".").canonicalize() {
-            Ok(path) => path,
+            Ok(path) => {
+                if path.is_symlink() {
+                    match read_link(path) {
+                        Ok(path) => path,
+                        Err(_e) => {
+                            #[cfg(debug_assertions)]
+                            eprintln!("{_e}");
+
+                            eprintln!("failed to resolve symlink");
+                            exit(1);
+                        }
+                    }
+                } else {
+                    path
+                }
+            }
             Err(_e) => {
                 #[cfg(debug_assertions)]
                 eprintln!("{_e}");
 
-                eprintln!("failed to canonicalize url");
+                eprintln!("failed to canonicalize path");
                 exit(1);
             }
         },

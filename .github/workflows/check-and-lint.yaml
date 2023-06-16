@@ -6,6 +6,10 @@ on:
 
 name: Check and Lint
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     name: Check
@@ -35,5 +39,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: Swatinem/rust-cache@v1
       - run: sudo apt install -y libgpgme-dev
       - run: cargo clippy --all-features

@@ -122,9 +122,9 @@ pub fn sync_config(path: PathBuf) {
                         if _e.to_string() != *"File exists (os error 17)" {
                             eprintln!("{_e}")
                         } else if target.is_symlink() {
-                            let target = target.canonicalize().unwrap();
+                            let target_canonicalized = target.canonicalize().unwrap();
                             let source = file_path.canonicalize().unwrap();
-                            if source != target {
+                            if source != target_canonicalized {
                                 println!(
                                     "{} is not symlinked to {}",
                                     target.display(),
@@ -198,9 +198,9 @@ pub fn sync(path: &PathBuf) {
                                 if e.to_string() != *"File exists (os error 17)" {
                                     eprintln!("{e}")
                                 } else if target.is_symlink() {
-                                    let target = target.canonicalize().unwrap();
+                                    let target_canon = target.canonicalize().unwrap();
                                     let source = file.canonicalize().unwrap();
-                                    if source != target {
+                                    if source != target_canon {
                                         println!(
                                             "{} is not symlinked to {}",
                                             target.display(),

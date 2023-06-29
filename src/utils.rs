@@ -1,6 +1,11 @@
 use super::{
     config::Config,
-    git::{add, commit, push},
+    git::{
+        add, commit,
+        pull::{do_fetch, do_merge},
+        push,
+        shared::get_current_branch,
+    },
 };
 use dirs::{config_dir, home_dir};
 use git2::{build::RepoBuilder, Cred, FetchOptions, RemoteCallbacks, Repository, StatusOptions};
@@ -213,6 +218,42 @@ pub fn sync(path: &PathBuf) {
                     }
                 }
             }
+        }
+    }
+}
+
+pub fn pull(path: &PathBuf) {
+    let repo = match Repository::open(path) {
+        Ok(repo) => repo,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{_e}");
+
+            eprintln!("failed to open repo");
+            exit(9);
+        }
+    };
+
+    let mut remote = repo.find_remote("origin").unwrap();
+    let branch = get_current_branch(&repo).unwrap();
+    let fetch_commit = match do_fetch(&repo, &[&branch], &mut remote) {
+        Ok(a) => a,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{_e}");
+
+            eprintln!("failed to fetch latest commit");
+            exit(9);
+        }
+    };
+    match do_merge(&repo, &branch, fetch_commit) {
+        Ok(_) => {}
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("{_e}");
+
+            eprintln!("failed to merge");
+            exit(9);
         }
     }
 }

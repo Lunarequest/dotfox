@@ -1,4 +1,4 @@
-use git2::{Commit, Config, ObjectType, Repository, Signature};
+use git2::{Commit, Config, ObjectType, Repository};
 use gpgme::Context;
 use std::process::exit;
 
@@ -19,27 +19,6 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
             exit(3);
         }
     };
-
-    let name = match config.get_string("user.name") {
-        Ok(name) => name,
-        Err(_e) => {
-            #[cfg(debug_assertions)]
-            eprintln!("{_e}");
-
-            eprintln!("Missing name from git field, I need you to tell me who you are using git");
-            exit(4);
-        }
-    };
-    let email = match config.get_string("user.email") {
-        Ok(email) => email,
-        Err(_e) => {
-            #[cfg(debug_assertions)]
-            eprintln!("{_e}");
-
-            eprintln!("Missing email from git field, I need you to tell me who you are using git");
-            exit(4);
-        }
-    };
     let signing_key = config.get_string("user.signingkey");
 
     let mut index = repo.index().expect("Unable to open index");
@@ -53,14 +32,11 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
             exit(5);
         }
     };
-    let signature = match Signature::now(&name, &email) {
+    let signature = match repo.signature() {
         Ok(sig) => sig,
-        Err(_e) => {
-            #[cfg(debug_assertions)]
-            eprintln!("{_e}");
-
-            eprintln!("failed to create signature");
-            exit(6);
+        Err(e) => {
+            eprintln!("{}", e);
+            exit(1);
         }
     };
     let parent_commit = match find_last_commit(repo) {

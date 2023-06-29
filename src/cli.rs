@@ -36,4 +36,9 @@ pub enum Commands {
         #[clap(help = "path to repo, optional defaults to current dir")]
         path: Option<PathBuf>,
     },
+    #[clap(about = "pull & sync changes from the git repo")]
+    Pull {
+        #[clap(help = "path to repo, optional defaults to current dir")]
+        path: Option<PathBuf>,
+    },
 }

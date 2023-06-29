@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
     process::exit,
 };
-use utils::{clone, push, sync};
+use utils::{clone, pull, push, sync};
 mod cli;
 mod config;
 mod git;
@@ -98,6 +98,11 @@ fn main() {
         Commands::Push { message, path } => {
             let path = resolve_dir(path);
             push(&path, message);
+        }
+        Commands::Pull { path } => {
+            let path = resolve_dir(path);
+            pull(&path);
+            sync(&path);
         }
     }
 }

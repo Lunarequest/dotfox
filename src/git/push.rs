@@ -1,22 +1,5 @@
+use super::shared::get_current_branch;
 use git2::{Cred, Direction, PushOptions, RemoteCallbacks, Repository};
-use std::process::exit;
-//exit code 2 means that it was not able to resolve the branch name
-fn get_current_branch(repo: &Repository) -> Result<String, git2::Error> {
-    let head = repo.head()?;
-    if head.is_branch() {
-        let name = match head.name() {
-            Some(name) => name,
-            None => {
-                eprintln!("failed to resolve branch name");
-                exit(2)
-            }
-        };
-        Ok(name.to_string())
-    } else {
-        eprintln!("Not on a valid git branch");
-        exit(9);
-    }
-}
 
 pub fn git_push(repo: &Repository) -> Result<(), git2::Error> {
     let mut callbacks = RemoteCallbacks::new();

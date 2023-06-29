@@ -14,6 +14,9 @@ gpgme = { version = "0.11.0", features = ["v1_18"] }
 serde = { version = "1.0.164", features = ["derive"] }
 sysinfo = "0.29.2"
 serde_json = "1.0.97"
+modern-terminal = "0.7.0"
+owo-colors = { version = "3.5.0", features = ["alloc", "supports-color", "supports-colors"] }
+tabled = "0.12.2"
 
 [profile.release]
 lto = true

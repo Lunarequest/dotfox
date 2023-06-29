@@ -6,18 +6,21 @@ use super::{
         push,
         shared::get_current_branch,
     },
+    map::Map,
 };
 use dirs::{config_dir, home_dir};
 use git2::{build::RepoBuilder, Cred, FetchOptions, RemoteCallbacks, Repository, StatusOptions};
+use owo_colors::{OwoColorize, Stream::Stdout};
 use serde_json::from_reader;
-
 use std::{
     env::set_current_dir,
     fs::{read_dir, OpenOptions},
     os::unix::fs::symlink,
     path::{Path, PathBuf},
     process::exit,
+    vec,
 };
+use tabled::Table;
 
 pub fn push(path: &Path, message: String) {
     let repo = match Repository::open(path) {
@@ -101,7 +104,7 @@ pub fn clone(url: String, path: &Path) {
         .expect("failed to clone directory");
 }
 
-pub fn sync_config(path: PathBuf) {
+pub fn sync_config(path: PathBuf) -> Vec<(PathBuf, PathBuf)> {
     let config_dir = match config_dir() {
         Some(config) => config,
         None => {
@@ -110,6 +113,7 @@ pub fn sync_config(path: PathBuf) {
         }
     };
     let files = read_dir(path).expect("unable to read given path");
+    let mut sync_files: Vec<(PathBuf, PathBuf)> = vec![];
     for file in files {
         match file {
             Err(_e) => {
@@ -118,26 +122,35 @@ pub fn sync_config(path: PathBuf) {
             Ok(file) => {
                 let file_path = file.path();
                 let filename = file.file_name();
-                let target = &config_dir.join(&filename);
-                match symlink(&file_path, target) {
-                    Ok(_) => {
-                        println!("{} -> {}", target.display(), file_path.display());
-                    }
-                    Err(_e) => {
-                        if _e.to_string() != *"File exists (os error 17)" {
-                            eprintln!("{_e}")
-                        } else if target.is_symlink() {
-                            let target_canonicalized = target.canonicalize().unwrap();
-                            let source = file_path.canonicalize().unwrap();
-                            if source != target_canonicalized {
-                                println!(
-                                    "{} is not symlinked to {}",
-                                    target.display(),
-                                    file_path.display()
-                                )
-                            }
-                        }
-                    }
+                let target = config_dir.join(&filename);
+
+                sync_files.append(&mut vec![(file_path, target)]);
+            }
+        }
+    }
+    sync_files
+}
+
+pub fn symlink_internal(file: &PathBuf, target: &PathBuf) {
+    match symlink(&file, &target) {
+        Ok(_) => {
+            println!("{} -> {}", target.display(), file.display());
+        }
+        Err(e) => {
+            if e.to_string() != *"File exists (os error 17)" {
+                eprintln!("{e}")
+            } else if target.is_symlink() {
+                let target_canon = target.canonicalize().unwrap();
+                let source = file.canonicalize().unwrap();
+                if source != target_canon {
+                    println!(
+                        "{} is not symlinked to {}",
+                        target
+                            .display()
+                            .if_supports_color(Stdout, |text| text.cyan()),
+                        file.display()
+                            .if_supports_color(Stdout, |text| text.green())
+                    )
                 }
             }
         }
@@ -175,12 +188,26 @@ pub fn sync(path: &PathBuf) {
         }
     };
 
-    let files = config.folders();
+    let mut files = config.folders();
+    let mut sync_files: Vec<(PathBuf, PathBuf)> = vec![];
+    let mut table: Vec<Map> = vec![];
+
+    files.sort();
+    files.dedup();
+
+    println!(
+        "{}",
+        "Resolving symlinks".if_supports_color(Stdout, |text| text.green())
+    );
 
     for dir in files {
         let dir = path.join(dir);
         if !dir.is_dir() {
-            eprintln!("Path {} is not a direcotory", dir.display());
+            eprintln!(
+                "{}",
+                format!("Path {} is not a direcotory", dir.display())
+                    .if_supports_color(Stdout, |text| text.red())
+            );
             exit(1);
         }
         let in_files = read_dir(dir).unwrap();
@@ -192,33 +219,40 @@ pub fn sync(path: &PathBuf) {
                     let filename = file.file_name();
                     let file = file.path();
                     if filename == *".config" {
-                        sync_config(file);
+                        let mut f = sync_config(file);
+                        sync_files.append(&mut f);
                     } else {
-                        let target = &home_dir.join(filename);
-                        match symlink(&file, target) {
-                            Ok(_) => {
-                                println!("{} -> {}", target.display(), file.display());
-                            }
-                            Err(e) => {
-                                if e.to_string() != *"File exists (os error 17)" {
-                                    eprintln!("{e}")
-                                } else if target.is_symlink() {
-                                    let target_canon = target.canonicalize().unwrap();
-                                    let source = file.canonicalize().unwrap();
-                                    if source != target_canon {
-                                        println!(
-                                            "{} is not symlinked to {}",
-                                            target.display(),
-                                            file.display()
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        let target = home_dir.join(filename);
+                        sync_files.append(&mut vec![(file, target)])
                     }
                 }
             }
         }
+    }
+
+    if !sync_files.is_empty() {
+        for file in &sync_files {
+            table.append(&mut vec![Map::new(&file.0, &file.1)])
+        }
+
+        let table = Table::new(&table).to_string();
+
+        println!("{}", table.if_supports_color(Stdout, |text| text.bold()));
+    } else {
+        eprintln!(
+            "{}",
+            "there are no files to sync".if_supports_color(Stdout, |text| text.red())
+        );
+        exit(1);
+    }
+
+    println!(
+        "{}",
+        "Symlinks resolved".if_supports_color(Stdout, |text| text.green())
+    );
+
+    for file in &sync_files {
+        symlink_internal(&file.0, &file.1);
     }
 }
 
@@ -229,7 +263,10 @@ pub fn pull(path: &PathBuf) {
             #[cfg(debug_assertions)]
             eprintln!("{_e}");
 
-            eprintln!("failed to open repo");
+            eprintln!(
+                "{}",
+                "failed to open repo".if_supports_color(Stdout, |text| text.red())
+            );
             exit(9);
         }
     };
@@ -242,7 +279,10 @@ pub fn pull(path: &PathBuf) {
             #[cfg(debug_assertions)]
             eprintln!("{_e}");
 
-            eprintln!("failed to fetch latest commit");
+            eprintln!(
+                "{}",
+                "failed to fetch latest commit".if_supports_color(Stdout, |text| text.red())
+            );
             exit(9);
         }
     };
@@ -252,7 +292,10 @@ pub fn pull(path: &PathBuf) {
             #[cfg(debug_assertions)]
             eprintln!("{_e}");
 
-            eprintln!("failed to merge");
+            eprintln!(
+                "{}",
+                "failed to merge".if_supports_color(Stdout, |text| text.red())
+            );
             exit(9);
         }
     }

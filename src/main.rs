@@ -1,6 +1,7 @@
 use clap::Parser;
 use cli::Commands;
 use git2::Repository;
+use owo_colors::{OwoColorize, Stream::Stdout};
 use std::{
     fs::{create_dir_all, read_link},
     path::PathBuf,
@@ -10,6 +11,7 @@ use utils::{clone, pull, push, sync};
 mod cli;
 mod config;
 mod git;
+mod map;
 mod utils;
 
 fn resolve_dir(path: Option<PathBuf>) -> PathBuf {
@@ -43,8 +45,24 @@ fn resolve_dir(path: Option<PathBuf>) -> PathBuf {
     }
 }
 
+fn startup() {
+    let startup_text = "
+       _       _    __
+    __| | ___ | |_ / _| _____  __
+   / _` |/ _ \\| __| |_ / _ \\ \\/ /
+  | (_| | (_) | |_|  _| (_) >  <
+   \\__,_|\\___/ \\__|_|  \\___/_/\\_\\
+    ";
+    println!(
+        "{}",
+        startup_text.if_supports_color(Stdout, |text| text.red())
+    )
+}
+
 fn main() {
     let cli = cli::Cli::parse();
+    startup();
+
     match cli.command {
         Commands::Init { path } => {
             let path = resolve_dir(path);

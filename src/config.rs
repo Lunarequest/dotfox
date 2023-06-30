@@ -28,35 +28,33 @@ impl Config {
         for program in self.config {
             if program.os.is_none() && program.hostname.is_none() {
                 folders.append(&mut vec![program.folder]);
+            } else if program.os.is_none() {
+                let targethost = program.hostname;
+                if let Some(target) = targethost {
+                    if current_hostname == target {
+                        folders.append(&mut vec![program.folder]);
+                    }
+                }
+            } else if program.hostname.is_none() {
+                let targetos = program.os;
+                if let Some(targetos) = targetos {
+                    if current_os == targetos {
+                        folders.append(&mut vec![program.folder]);
+                    }
+                }
             } else {
-                if program.os.is_none() {
-                    let targethost = program.hostname;
+                let targetos = program.os;
+                let targethost = program.hostname;
+                if let Some(targetos) = targetos {
                     if let Some(target) = targethost {
-                        if current_hostname == target {
+                        if current_hostname == target && current_os == targetos {
                             folders.append(&mut vec![program.folder]);
-                        }
-                    }
-                } else if program.hostname.is_none() {
-                    let targetos = program.os;
-                    if let Some(targetos) = targetos {
-                        if current_os == targetos {
-                            folders.append(&mut vec![program.folder]);
-                        }
-                    }
-                } else {
-                    let targetos = program.os;
-                    let targethost = program.hostname;
-                    if let Some(targetos) = targetos {
-                        if let Some(target) = targethost {
-                            if current_hostname == target && current_os == targetos {
-                                folders.append(&mut vec![program.folder]);
-                            }
                         }
                     }
                 }
             }
         }
         folders.dedup();
-        return folders;
+        folders
     }
 }

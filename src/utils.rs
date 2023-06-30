@@ -10,7 +10,7 @@ use super::{
 };
 use dirs::{config_dir, home_dir};
 use git2::{build::RepoBuilder, Cred, FetchOptions, RemoteCallbacks, Repository, StatusOptions};
-use owo_colors::{OwoColorize, Stream::Stdout};
+use owo_colors::{OwoColorize, Stream::Stdout, Style};
 use serde_json::from_reader;
 use std::{
     env::set_current_dir,
@@ -131,8 +131,8 @@ pub fn sync_config(path: PathBuf) -> Vec<(PathBuf, PathBuf)> {
     sync_files
 }
 
-pub fn symlink_internal(file: &PathBuf, target: &PathBuf) {
-    match symlink(&file, &target) {
+pub fn symlink_internal(file: &Path, target: &Path) {
+    match symlink(file, target) {
         Ok(_) => {
             println!("{} -> {}", target.display(), file.display());
         }
@@ -157,7 +157,7 @@ pub fn symlink_internal(file: &PathBuf, target: &PathBuf) {
     }
 }
 
-pub fn sync(path: &PathBuf) {
+pub fn sync(path: &Path) {
     let home_dir = match home_dir() {
         Some(home) => home,
         None => {
@@ -233,6 +233,21 @@ pub fn sync(path: &PathBuf) {
     if !sync_files.is_empty() {
         for file in &sync_files {
             table.append(&mut vec![Map::new(&file.0, &file.1)])
+        }
+
+        let pre_len = sync_files.len();
+        sync_files.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        sync_files.dedup_by(|a, b| a.1.eq(&b.1));
+
+        let error_style: Style = Style::new().red().bold();
+
+        if sync_files.len() != pre_len {
+            eprintln!(
+                "{}",
+                "There is a conflict, resolution could not be complete"
+                    .if_supports_color(Stdout, |text| text.style(error_style))
+            );
+            exit(9);
         }
 
         let table = Table::new(&table).to_string();

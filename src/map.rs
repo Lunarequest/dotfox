@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 use tabled::Tabled;
 
 #[derive(Debug, Tabled)]
@@ -8,7 +8,7 @@ pub struct Map {
 }
 
 impl Map {
-    pub fn new(source: &PathBuf, target: &PathBuf) -> Self {
+    pub fn new(source: &Path, target: &Path) -> Self {
         Self {
             source: format!("{}", source.display()),
             target: format!("{}", target.display()),

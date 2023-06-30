@@ -1,3 +1,6 @@
+#[cfg(debug_assertions)]
+use crate::utils::print_debug;
+use crate::utils::{print_error, print_info};
 use git2::{build::CheckoutBuilder, AnnotatedCommit, Config, Cred, Error, Reference, Repository};
 use gpgme::Context;
 use std::process::exit;
@@ -9,7 +12,7 @@ fn fast_forward(repo: &Repository, lb: &mut Reference, rc: AnnotatedCommit) -> R
     };
 
     let msg = format!("Fast-Forward: Setting {} to id: {}", name, rc.id());
-    println!("{}", msg);
+    print_info(msg.clone());
     lb.set_target(rc.id(), &msg)?;
     repo.set_head(&name)?;
     repo.checkout_head(Some(CheckoutBuilder::default().force()))?;
@@ -59,28 +62,28 @@ pub fn do_fetch<'a>(
     // Always fetch all tags.
     // Perform a download and also update tips
     fo.download_tags(git2::AutotagOption::All);
-    println!("Fetching {} for repo", remote.name().unwrap());
+    print_info(format!("Fetching {} for repo", remote.name().unwrap()));
     remote.fetch(refs, Some(&mut fo), None)?;
 
     // If there are local objects (we got a thin pack), then tell the user
     // how many objects we saved from having to cross the network.
     let stats = remote.stats();
     if stats.local_objects() > 0 {
-        println!(
+        print_info(format!(
             "\rReceived {}/{} objects in {} bytes (used {} local \
              objects)",
             stats.indexed_objects(),
             stats.total_objects(),
             stats.received_bytes(),
             stats.local_objects()
-        );
+        ));
     } else {
-        println!(
+        print_info(format!(
             "\rReceived {}/{} objects in {} bytes",
             stats.indexed_objects(),
             stats.total_objects(),
             stats.received_bytes()
-        );
+        ));
     }
 
     let fetch_head = repo.find_reference("FETCH_HEAD")?;
@@ -101,7 +104,7 @@ fn normal_merge(
         .tree()?;
     let mut idx = repo.merge_trees(&ancestor, &local_tree, &remote_tree, None)?;
     if idx.has_conflicts() {
-        eprintln!("Merge conflicts detected...");
+        print_error("Merge conflicts detected...".to_string());
         repo.checkout_index(Some(&mut idx), None)?;
         return Ok(());
     }
@@ -128,9 +131,9 @@ fn normal_merge(
                 Ok(ctx) => ctx,
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("{_e}");
+                    print_debug(_e.to_string());
 
-                    println!("Openpgp contexted failed to initzalize");
+                    print_error("Openpgp contexted failed to initzalize".to_string());
                     exit(10);
                 }
             };
@@ -139,9 +142,11 @@ fn normal_merge(
                 Ok(key) => key,
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("{_e}");
+                    print_debug(_e.to_string());
 
-                    eprintln!("Secret key for {key} could not be accessed does it exist?");
+                    print_error(format!(
+                        "Secret key for {key} could not be accessed does it exist?"
+                    ));
                     exit(10);
                 }
             };
@@ -150,9 +155,9 @@ fn normal_merge(
                 Ok(_) => (),
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("{_e}");
+                    print_debug(_e.to_string());
 
-                    eprintln!("could not add key as signer");
+                    print_error("could not add key as signer".to_string());
                     exit(10);
                 }
             };
@@ -160,9 +165,9 @@ fn normal_merge(
             match ctx.sign_detached(commit_as_string.clone(), &mut output) {
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("{_e}");
+                    print_debug(_e.to_string());
 
-                    eprintln!("failed to sign commit");
+                    print_error("failed to sign commit".to_string());
                     exit(1);
                 }
                 Ok(_) => {
@@ -170,9 +175,11 @@ fn normal_merge(
                         Ok(sig) => sig,
                         Err(_e) => {
                             #[cfg(debug_assertions)]
-                            eprintln!("{_e}");
+                            print_debug(_e.to_string());
 
-                            eprintln!("Failed to conert signature to string from bytes");
+                            print_error(
+                                "Failed to conert signature to string from bytes".to_string(),
+                            );
                             exit(1);
                         }
                     };
@@ -180,9 +187,9 @@ fn normal_merge(
                         Ok(oid) => oid,
                         Err(_e) => {
                             #[cfg(debug_assertions)]
-                            eprintln!("{_e}");
+                            print_debug(_e.to_string());
 
-                            eprintln!("failed to create signed commit");
+                            print_error("failed to create signed commit".to_string());
                             exit(9);
                         }
                     };
@@ -192,17 +199,17 @@ fn normal_merge(
                             Ok(_) => {}
                             Err(_e) => {
                                 #[cfg(debug_assertions)]
-                                eprintln!("{_e}");
+                                print_debug(_e.to_string());
 
-                                eprintln!("failed to point HEAD to latest commit");
+                                print_error("failed to point HEAD to latest commit".to_string());
                                 exit(9);
                             }
                         },
                         Err(_e) => {
                             #[cfg(debug_assertions)]
-                            eprintln!("{_e}");
+                            print_debug(_e.to_string());
 
-                            eprintln!("failed to get HEAD");
+                            print_error("failed to get HEAD".to_string());
                             exit(9);
                         }
                     }
@@ -235,7 +242,7 @@ pub fn do_merge<'a>(
 
     // 2. Do the appropriate merge
     if analysis.0.is_fast_forward() {
-        println!("Doing a fast forward");
+        print_info("Doing a fast forward".to_string());
         // do a fast forward
         let refname = format!("refs/heads/{}", remote_branch);
         match repo.find_reference(&refname) {
@@ -266,7 +273,7 @@ pub fn do_merge<'a>(
         let head_commit = repo.reference_to_annotated_commit(&repo.head()?)?;
         normal_merge(repo, &head_commit, &fetch_commit)?;
     } else {
-        println!("Nothing to do...");
+        print_info("Nothing to do...".to_string());
     }
     Ok(())
 }

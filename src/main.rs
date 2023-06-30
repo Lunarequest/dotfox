@@ -1,13 +1,14 @@
+#[cfg(debug_assertions)]
+use crate::utils::print_debug;
 use clap::Parser;
 use cli::Commands;
 use git2::Repository;
-use owo_colors::{OwoColorize, Stream::Stdout};
 use std::{
     fs::{create_dir_all, read_link},
     path::PathBuf,
     process::exit,
 };
-use utils::{clone, pull, push, sync};
+use utils::{clone, print_error, print_info, pull, push, sync};
 mod cli;
 mod config;
 mod git;
@@ -24,9 +25,9 @@ fn resolve_dir(path: Option<PathBuf>) -> PathBuf {
                         Ok(path) => path,
                         Err(_e) => {
                             #[cfg(debug_assertions)]
-                            eprintln!("{_e}");
+                            print_debug(format!("{_e}"));
 
-                            eprintln!("failed to resolve symlink");
+                            print_error("failed to resolve symlink".to_string());
                             exit(1);
                         }
                     }
@@ -36,9 +37,9 @@ fn resolve_dir(path: Option<PathBuf>) -> PathBuf {
             }
             Err(_e) => {
                 #[cfg(debug_assertions)]
-                eprintln!("{_e}");
+                print_debug(format!("{_e}"));
 
-                eprintln!("failed to canonicalize path");
+                print_error("failed to canonicalize path".to_string());
                 exit(1);
             }
         },
@@ -53,10 +54,7 @@ fn startup() {
   | (_| | (_) | |_|  _| (_) >  <
    \\__,_|\\___/ \\__|_|  \\___/_/\\_\\
     ";
-    println!(
-        "{}",
-        startup_text.if_supports_color(Stdout, |text| text.red())
-    )
+    print_info(startup_text.to_string());
 }
 
 fn main() {
@@ -71,9 +69,9 @@ fn main() {
                     Ok(_) => {}
                     Err(_e) => {
                         #[cfg(debug_assertions)]
-                        eprintln!("{_e}");
+                        print_debug(_e.to_string());
 
-                        eprintln!("failed to canonicalize url");
+                        print_error("failed to canonicalize url".to_string());
                         exit(1);
                     }
                 };
@@ -82,9 +80,9 @@ fn main() {
                 Ok(_) => {}
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("{_e}");
+                    print_debug(_e.to_string());
 
-                    eprintln!("Failed to create diectory {}", path.display());
+                    print_error(format!("Failed to create diectory {}", path.display()));
                     exit(1);
                 }
             }
@@ -102,7 +100,7 @@ fn main() {
                     let base = match url.split('/').last() {
                         Some(s) => s.replace(".git", ""),
                         None => {
-                            eprintln!("not valid url");
+                            print_error("not valid url".to_string());
                             exit(1);
                         }
                     };

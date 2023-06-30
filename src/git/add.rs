@@ -1,3 +1,6 @@
+#[cfg(debug_assertions)]
+use crate::utils::print_debug;
+use crate::utils::print_error;
 use git2::{IndexAddOption, Repository};
 use std::process::exit;
 
@@ -6,9 +9,9 @@ pub fn git_add(repo: &Repository) {
         Ok(index) => index,
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(_e.to_string());
 
-            eprintln!("failed to get image");
+            print_error("failed to get image".to_string());
             exit(9);
         }
     };
@@ -17,9 +20,9 @@ pub fn git_add(repo: &Repository) {
         Ok(_) => (),
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(_e.to_string());
 
-            eprintln!("failed to add files to repo");
+            print_error("failed to add files to repo".to_string());
             exit(1);
         }
     }
@@ -27,9 +30,9 @@ pub fn git_add(repo: &Repository) {
         Ok(_) => {}
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(_e.to_string());
 
-            eprintln!("failed to add files to repo");
+            print_error("failed to add files to repo".to_string());
             exit(1);
         }
     }

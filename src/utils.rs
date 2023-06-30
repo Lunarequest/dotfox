@@ -22,17 +22,42 @@ use std::{
 };
 use tabled::Table;
 
+pub fn print_error(msg: String) {
+    let style = Style::new().bold().red();
+    eprintln!(
+        "{}",
+        msg.if_supports_color(Stdout, |text| text.style(style))
+    );
+}
+
+pub fn print_info(msg: String) {
+    let style = Style::new().bold().green();
+    println!(
+        "{}",
+        msg.if_supports_color(Stdout, |text| text.style(style))
+    );
+}
+
+#[cfg(debug_assertions)]
+pub fn print_debug(msg: String) {
+    let style = Style::new().bold().cyan();
+    eprintln!(
+        "{}",
+        msg.if_supports_color(Stdout, |text| text.style(style))
+    );
+}
+
 pub fn push(path: &Path, message: String) {
     let repo = match Repository::open(path) {
         Ok(repo) => repo,
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(format!("{_e}"));
 
-            eprintln!(
+            print_error(format!(
                 "unable to open repo {} is it really a git repo?",
                 path.display()
-            );
+            ));
             exit(9);
         }
     };
@@ -41,9 +66,9 @@ pub fn push(path: &Path, message: String) {
         Ok(()) => {}
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(format!("{_e}"));
 
-            eprintln!("failed to get set current directory");
+            print_error("failed to get set current directory".to_string());
             exit(1);
         }
     };
@@ -56,15 +81,15 @@ pub fn push(path: &Path, message: String) {
         Ok(statuses) => statuses,
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(format!("{_e}"));
 
-            eprintln!("failed to get status of files in repo");
+            print_error("failed to get status of files in repo".to_string());
             exit(9);
         }
     };
 
     if statuses.is_empty() {
-        eprintln!("No files to commit");
+        print_error("No files to commit".to_string());
         exit(1);
     }
 
@@ -73,9 +98,9 @@ pub fn push(path: &Path, message: String) {
         Ok(_) => {}
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(format!("{_e}"));
 
-            eprintln!("failed to push changes, commit has been made.");
+            print_error("failed to push changes, commit has been made.".to_string());
             exit(9);
         }
     }
@@ -108,7 +133,7 @@ pub fn sync_config(path: PathBuf) -> Vec<(PathBuf, PathBuf)> {
     let config_dir = match config_dir() {
         Some(config) => config,
         None => {
-            eprintln!("Unable to resolve xdg-config");
+            print_error("Unable to resolve xdg-config".to_string());
             exit(1);
         }
     };
@@ -117,7 +142,7 @@ pub fn sync_config(path: PathBuf) -> Vec<(PathBuf, PathBuf)> {
     for file in files {
         match file {
             Err(_e) => {
-                eprintln!("{_e}");
+                print_debug(_e.to_string());
             }
             Ok(file) => {
                 let file_path = file.path();
@@ -134,23 +159,23 @@ pub fn sync_config(path: PathBuf) -> Vec<(PathBuf, PathBuf)> {
 pub fn symlink_internal(file: &Path, target: &Path) {
     match symlink(file, target) {
         Ok(_) => {
-            println!("{} -> {}", target.display(), file.display());
+            print_info(format!("{} -> {}", target.display(), file.display()));
         }
         Err(e) => {
             if e.to_string() != *"File exists (os error 17)" {
-                eprintln!("{e}")
+                print_debug(e.to_string())
             } else if target.is_symlink() {
                 let target_canon = target.canonicalize().unwrap();
                 let source = file.canonicalize().unwrap();
                 if source != target_canon {
-                    println!(
+                    print_info(format!(
                         "{} is not symlinked to {}",
                         target
                             .display()
                             .if_supports_color(Stdout, |text| text.cyan()),
                         file.display()
                             .if_supports_color(Stdout, |text| text.green())
-                    )
+                    ))
                 }
             }
         }
@@ -161,21 +186,21 @@ pub fn sync(path: &Path) {
     let home_dir = match home_dir() {
         Some(home) => home,
         None => {
-            eprintln!("unable to resolve home direcotry");
+            print_error("unable to resolve home direcotry".to_string());
             exit(1);
         }
     };
     let config_path = path.join("dotfox.json");
 
     if !config_path.exists() || config_path.is_dir() {
-        eprintln!("Missing config");
+        print_error("Missing config".to_string());
         exit(78);
     }
 
     let config_reader = match OpenOptions::new().read(true).open(config_path) {
         Ok(reader) => reader,
         Err(e) => {
-            eprintln!("failed to read config.\n{e}");
+            print_error(format!("failed to read config.\n{e}"));
             exit(71);
         }
     };
@@ -183,7 +208,7 @@ pub fn sync(path: &Path) {
     let config: Config = match from_reader(config_reader) {
         Ok(config) => config,
         Err(e) => {
-            eprintln!("Failed to Deseralize config\n{e}");
+            print_error(format!("Failed to Deseralize config\n{e}"));
             exit(78);
         }
     };
@@ -195,26 +220,23 @@ pub fn sync(path: &Path) {
     files.sort();
     files.dedup();
 
-    println!(
-        "{}",
-        "Resolving symlinks".if_supports_color(Stdout, |text| text.green())
-    );
+    print_info("Resolving symlinks".to_string());
 
     for dir in files {
         let dir = path.join(dir);
         if !dir.is_dir() {
-            eprintln!(
-                "{}",
-                format!("Path {} is not a direcotory", dir.display())
-                    .if_supports_color(Stdout, |text| text.red())
-            );
+            print_error(format!("Path {} is not a direcotory", dir.display()));
             exit(1);
         }
         let in_files = read_dir(dir).unwrap();
 
         for inner_file in in_files {
             match inner_file {
-                Err(_e) => eprintln!("{_e}"),
+                Err(_e) =>
+                {
+                    #[cfg(debug_assertions)]
+                    print_error(_e.to_string())
+                }
                 Ok(file) => {
                     let filename = file.file_name();
                     let file = file.path();
@@ -239,14 +261,8 @@ pub fn sync(path: &Path) {
         sync_files.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
         sync_files.dedup_by(|a, b| a.1.eq(&b.1));
 
-        let error_style: Style = Style::new().red().bold();
-
         if sync_files.len() != pre_len {
-            eprintln!(
-                "{}",
-                "There is a conflict, resolution could not be complete"
-                    .if_supports_color(Stdout, |text| text.style(error_style))
-            );
+            print_error("There is a conflict, resolution could not be complete".to_string());
             exit(9);
         }
 
@@ -254,17 +270,11 @@ pub fn sync(path: &Path) {
 
         println!("{}", table.if_supports_color(Stdout, |text| text.bold()));
     } else {
-        eprintln!(
-            "{}",
-            "there are no files to sync".if_supports_color(Stdout, |text| text.red())
-        );
+        print_error("there are no files to sync".to_string());
         exit(1);
     }
 
-    println!(
-        "{}",
-        "Symlinks resolved".if_supports_color(Stdout, |text| text.green())
-    );
+    print_error("Symlinks resolved".to_string());
 
     for file in &sync_files {
         symlink_internal(&file.0, &file.1);
@@ -276,12 +286,9 @@ pub fn pull(path: &PathBuf) {
         Ok(repo) => repo,
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(format!("{_e}"));
 
-            eprintln!(
-                "{}",
-                "failed to open repo".if_supports_color(Stdout, |text| text.red())
-            );
+            print_error("failed to open repo".to_string());
             exit(9);
         }
     };
@@ -292,12 +299,9 @@ pub fn pull(path: &PathBuf) {
         Ok(a) => a,
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(format!("{_e}"));
 
-            eprintln!(
-                "{}",
-                "failed to fetch latest commit".if_supports_color(Stdout, |text| text.red())
-            );
+            print_error("failed to fetch latest commit".to_string());
             exit(9);
         }
     };
@@ -305,12 +309,9 @@ pub fn pull(path: &PathBuf) {
         Ok(_) => {}
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(format!("{_e}"));
 
-            eprintln!(
-                "{}",
-                "failed to merge".if_supports_color(Stdout, |text| text.red())
-            );
+            print_error("failed to merge".to_string());
             exit(9);
         }
     }

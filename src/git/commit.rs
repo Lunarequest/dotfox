@@ -1,3 +1,6 @@
+#[cfg(debug_assertions)]
+use crate::utils::print_debug;
+use crate::utils::print_error;
 use git2::{Commit, Config, ObjectType, Repository};
 use gpgme::Context;
 use std::process::exit;
@@ -13,9 +16,9 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
         Ok(conf) => conf,
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(_e.to_string());
 
-            eprintln!("Unable to open .gitconfig");
+            print_error("Unable to open .gitconfig".to_string());
             exit(3);
         }
     };
@@ -26,16 +29,16 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
         Ok(oid) => oid,
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(_e.to_string());
 
-            eprintln!("failed to write tree");
+            print_error("failed to write tree".to_string());
             exit(5);
         }
     };
     let signature = match repo.signature() {
         Ok(sig) => sig,
         Err(e) => {
-            eprintln!("{}", e);
+            print_error(e.to_string());
             exit(1);
         }
     };
@@ -43,9 +46,9 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
         Ok(parent) => parent,
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(_e.to_string());
 
-            eprintln!("failed to find parent commit");
+            print_error("failed to find parent commit".to_string());
             exit(7);
         }
     };
@@ -53,9 +56,9 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
         Ok(oid) => oid,
         Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("{_e}");
+            print_debug(_e.to_string());
 
-            eprintln!("failed to find commit in tree");
+            print_error("failed to find commit in tree".to_string());
             exit(8);
         }
     };
@@ -73,9 +76,9 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
                 Ok(_) => {}
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("{_e}");
+                    print_debug(_e.to_string());
 
-                    println!("failed to commit");
+                    print_error("failed to commit".to_string());
                     exit(9);
                 }
             }
@@ -91,9 +94,9 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
                 Ok(commit) => String::from_utf8_lossy(&commit).to_string(),
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("{_e}");
+                    print_debug(_e.to_string());
 
-                    println!("failed to create buffer commit");
+                    print_error("failed to create buffer commit".to_string());
                     exit(9);
                 }
             };
@@ -102,9 +105,9 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
                 Ok(ctx) => ctx,
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("{_e}");
+                    print_debug(_e.to_string());
 
-                    println!("Openpgp contexted failed to initzalize");
+                    print_error("Openpgp contexted failed to initzalize".to_string());
                     exit(10);
                 }
             };
@@ -114,9 +117,11 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
                 Ok(key) => key,
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("{_e}");
+                    print_debug(_e.to_string());
 
-                    eprintln!("Secret key for {key} could not be accessed does it exist?");
+                    print_error(format!(
+                        "Secret key for {key} could not be accessed does it exist?"
+                    ));
                     exit(10);
                 }
             };
@@ -125,9 +130,9 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
                 Ok(_) => (),
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("{_e}");
+                    print_debug(_e.to_string());
 
-                    eprintln!("could not add key as signer");
+                    print_error("could not add key as signer".to_string());
                     exit(10);
                 }
             };
@@ -137,9 +142,9 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
             match ctx.sign_detached(commit_as_string.clone(), &mut output) {
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("{_e}");
+                    print_debug(_e.to_string());
 
-                    eprintln!("failed to sign commit");
+                    print_error("failed to sign commit".to_string());
                     exit(1);
                 }
                 Ok(_) => {
@@ -147,9 +152,11 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
                         Ok(sig) => sig,
                         Err(_e) => {
                             #[cfg(debug_assertions)]
-                            eprintln!("{_e}");
+                            print_debug(_e.to_string());
 
-                            eprintln!("Failed to conert signature to string from bytes");
+                            print_error(
+                                "Failed to conert signature to string from bytes".to_string(),
+                            );
                             exit(1);
                         }
                     };
@@ -157,9 +164,9 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
                         Ok(oid) => oid,
                         Err(_e) => {
                             #[cfg(debug_assertions)]
-                            eprintln!("{_e}");
+                            print_debug(_e.to_string());
 
-                            eprintln!("failed to create signed commit");
+                            print_error("failed to create signed commit".to_string());
                             exit(9);
                         }
                     };
@@ -169,17 +176,17 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) {
                             Ok(_) => {}
                             Err(_e) => {
                                 #[cfg(debug_assertions)]
-                                eprintln!("{_e}");
+                                print_debug(_e.to_string());
 
-                                eprintln!("failed to point HEAD to latest commit");
+                                print_error("failed to point HEAD to latest commit".to_string());
                                 exit(9);
                             }
                         },
                         Err(_e) => {
                             #[cfg(debug_assertions)]
-                            eprintln!("{_e}");
+                            print_debug(_e.to_string());
 
-                            eprintln!("failed to get HEAD");
+                            print_error("failed to get HEAD".to_string());
                             exit(9);
                         }
                     }

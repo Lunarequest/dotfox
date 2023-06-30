@@ -142,6 +142,7 @@ pub fn sync_config(path: PathBuf) -> Vec<(PathBuf, PathBuf)> {
     for file in files {
         match file {
             Err(_e) => {
+                #[cfg(debug_assertions)]
                 print_debug(_e.to_string());
             }
             Ok(file) => {
@@ -163,6 +164,7 @@ pub fn symlink_internal(file: &Path, target: &Path) {
         }
         Err(e) => {
             if e.to_string() != *"File exists (os error 17)" {
+                #[cfg(debug_assertions)]
                 print_debug(e.to_string())
             } else if target.is_symlink() {
                 let target_canon = target.canonicalize().unwrap();

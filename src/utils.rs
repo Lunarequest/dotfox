@@ -274,7 +274,7 @@ pub fn sync(path: &Path) {
         exit(1);
     }
 
-    print_error("Symlinks resolved".to_string());
+    print_info("Symlinks resolved".to_string());
 
     for file in &sync_files {
         symlink_internal(&file.0, &file.1);

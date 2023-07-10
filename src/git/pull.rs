@@ -244,8 +244,7 @@ pub fn do_merge<'a>(
     if analysis.0.is_fast_forward() {
         print_info("Doing a fast forward".to_string());
         // do a fast forward
-        let refname = format!("refs/heads/{}", remote_branch);
-        match repo.find_reference(&refname) {
+        match repo.find_reference(&remote_branch) {
             Ok(mut r) => {
                 fast_forward(repo, &mut r, fetch_commit)?;
             }
@@ -254,12 +253,12 @@ pub fn do_merge<'a>(
                 // commit directly. Usually this is because you are pulling
                 // into an empty repository.
                 repo.reference(
-                    &refname,
+                    &remote_branch,
                     fetch_commit.id(),
                     true,
                     &format!("Setting {} to {}", remote_branch, fetch_commit.id()),
                 )?;
-                repo.set_head(&refname)?;
+                repo.set_head(&remote_branch)?;
                 repo.checkout_head(Some(
                     git2::build::CheckoutBuilder::default()
                         .allow_conflicts(true)

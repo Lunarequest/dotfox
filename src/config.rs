@@ -1,9 +1,10 @@
+use anyhow::{anyhow, Result};
+use platform_info::{PlatformInfo, PlatformInfoAPI, UNameAPI};
 use serde::Deserialize;
 use std::{
     env::consts::{ARCH, OS},
     path::PathBuf,
 };
-use sysinfo::{System, SystemExt};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -18,10 +19,12 @@ pub struct Programs {
 }
 
 impl Config {
-    pub fn folders(self) -> Vec<PathBuf> {
-        let mut sys = System::new_all();
-        sys.refresh_all();
-        let current_hostname = sys.host_name().unwrap();
+    pub fn folders(self) -> Result<Vec<PathBuf>> {
+        let sys = match PlatformInfo::new() {
+            Ok(sys) => sys,
+            Err(e) => return Err(anyhow!(e.to_string())),
+        };
+        let current_hostname = sys.nodename().to_string_lossy();
         let mut folders: Vec<PathBuf> = vec![];
         let current_os = format!("{OS}-{ARCH}");
 
@@ -55,6 +58,6 @@ impl Config {
             }
         }
         folders.dedup();
-        folders
+        Ok(folders)
     }
 }

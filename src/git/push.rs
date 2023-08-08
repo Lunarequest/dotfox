@@ -1,7 +1,8 @@
 use super::shared::get_current_branch;
+use anyhow::Result;
 use git2::{Cred, Direction, PushOptions, RemoteCallbacks, Repository};
 
-pub fn git_push(repo: &Repository) -> Result<(), git2::Error> {
+pub fn git_push(repo: &Repository) -> Result<()> {
     let mut callbacks = RemoteCallbacks::new();
     let mut push_opts = PushOptions::new();
     let mut remote = repo
@@ -20,9 +21,10 @@ pub fn git_push(repo: &Repository) -> Result<(), git2::Error> {
 
         //remote.connect(Direction::Push)?;
         push_opts.remote_callbacks(callbacks);
-        remote.push(&[&branch], Some(&mut push_opts))
+        remote.push(&[&branch], Some(&mut push_opts))?;
     } else {
         remote.connect(Direction::Push)?;
-        remote.push(&[&branch], None)
+        remote.push(&[&branch], None)?;
     }
+    Ok(())
 }

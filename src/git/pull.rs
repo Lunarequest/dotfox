@@ -1,11 +1,9 @@
-#[cfg(debug_assertions)]
-use crate::utils::print_debug;
 use crate::utils::{print_error, print_info};
-use git2::{build::CheckoutBuilder, AnnotatedCommit, Config, Cred, Error, Reference, Repository};
+use anyhow::{anyhow, Result};
+use git2::{build::CheckoutBuilder, AnnotatedCommit, Config, Cred, Reference, Repository};
 use gpgme::Context;
-use std::process::exit;
 
-fn fast_forward(repo: &Repository, lb: &mut Reference, rc: AnnotatedCommit) -> Result<(), Error> {
+fn fast_forward(repo: &Repository, lb: &mut Reference, rc: AnnotatedCommit) -> Result<()> {
     let name = match lb.name() {
         Some(s) => s.to_string(),
         None => String::from_utf8_lossy(lb.name_bytes()).to_string(),
@@ -23,7 +21,7 @@ pub fn do_fetch<'a>(
     repo: &'a git2::Repository,
     refs: &[&str],
     remote: &'a mut git2::Remote,
-) -> Result<git2::AnnotatedCommit<'a>, git2::Error> {
+) -> Result<git2::AnnotatedCommit<'a>> {
     let mut cb = git2::RemoteCallbacks::new();
 
     let url = remote
@@ -87,14 +85,15 @@ pub fn do_fetch<'a>(
     }
 
     let fetch_head = repo.find_reference("FETCH_HEAD")?;
-    repo.reference_to_annotated_commit(&fetch_head)
+    let commit = repo.reference_to_annotated_commit(&fetch_head)?;
+    Ok(commit)
 }
 
 fn normal_merge(
     repo: &Repository,
     local: &AnnotatedCommit,
     remote: &AnnotatedCommit,
-) -> Result<(), Error> {
+) -> Result<()> {
     let config = Config::open_default()?;
     let signing_key = config.get_string("user.signingkey");
     let local_tree = repo.find_commit(local.id())?.tree()?;
@@ -127,94 +126,23 @@ fn normal_merge(
             )?)
             .to_string();
 
-            let mut ctx = match Context::from_protocol(gpgme::Protocol::OpenPgp) {
-                Ok(ctx) => ctx,
-                Err(_e) => {
-                    #[cfg(debug_assertions)]
-                    print_debug(_e.to_string());
-
-                    print_error("Openpgp contexted failed to initzalize".to_string());
-                    exit(10);
-                }
-            };
+            let mut ctx = Context::from_protocol(gpgme::Protocol::OpenPgp)?;
             ctx.set_armor(true);
-            let gpg_key = match ctx.get_secret_key(&key) {
-                Ok(key) => key,
-                Err(_e) => {
-                    #[cfg(debug_assertions)]
-                    print_debug(_e.to_string());
+            let gpg_key = ctx.get_secret_key(&key)?;
 
-                    print_error(format!(
-                        "Secret key for {key} could not be accessed does it exist?"
-                    ));
-                    exit(10);
-                }
-            };
-
-            match ctx.add_signer(&gpg_key) {
-                Ok(_) => (),
-                Err(_e) => {
-                    #[cfg(debug_assertions)]
-                    print_debug(_e.to_string());
-
-                    print_error("could not add key as signer".to_string());
-                    exit(10);
-                }
-            };
+            ctx.add_signer(&gpg_key)?;
             let mut output = Vec::new();
             match ctx.sign_detached(commit_as_string.clone(), &mut output) {
                 Err(_e) => {
-                    #[cfg(debug_assertions)]
-                    print_debug(_e.to_string());
-
-                    print_error("failed to sign commit".to_string());
-                    exit(1);
+                    return Err(anyhow!("failed to sign commit"));
                 }
                 Ok(_) => {
-                    let sig = match String::from_utf8(output) {
-                        Ok(sig) => sig,
-                        Err(_e) => {
-                            #[cfg(debug_assertions)]
-                            print_debug(_e.to_string());
-
-                            print_error(
-                                "Failed to conert signature to string from bytes".to_string(),
-                            );
-                            exit(1);
-                        }
-                    };
-                    let oid = match repo.commit_signed(&commit_as_string, &sig, None) {
-                        Ok(oid) => oid,
-                        Err(_e) => {
-                            #[cfg(debug_assertions)]
-                            print_debug(_e.to_string());
-
-                            print_error("failed to create signed commit".to_string());
-                            exit(9);
-                        }
-                    };
-                    let head = repo.head();
-                    match head {
-                        Ok(mut head) => match head.set_target(oid, "REFLOG_MSG") {
-                            Ok(_) => {}
-                            Err(_e) => {
-                                #[cfg(debug_assertions)]
-                                print_debug(_e.to_string());
-
-                                print_error("failed to point HEAD to latest commit".to_string());
-                                exit(9);
-                            }
-                        },
-                        Err(_e) => {
-                            #[cfg(debug_assertions)]
-                            print_debug(_e.to_string());
-
-                            print_error("failed to get HEAD".to_string());
-                            exit(9);
-                        }
-                    }
+                    let sig = String::from_utf8(output)?;
+                    let oid = repo.commit_signed(&commit_as_string, &sig, None)?;
+                    let mut head = repo.head()?;
+                    head.set_target(oid, "REFLOG_MSG")?;
                 }
-            }
+            };
         }
         Err(_) => {
             let _merge_commit = repo.commit(
@@ -236,7 +164,7 @@ pub fn do_merge<'a>(
     repo: &'a Repository,
     remote_branch: &str,
     fetch_commit: AnnotatedCommit<'a>,
-) -> Result<(), git2::Error> {
+) -> Result<()> {
     // 1. do a merge analysis
     let analysis = repo.merge_analysis(&[&fetch_commit])?;
 
@@ -244,7 +172,7 @@ pub fn do_merge<'a>(
     if analysis.0.is_fast_forward() {
         print_info("Doing a fast forward".to_string());
         // do a fast forward
-        match repo.find_reference(&remote_branch) {
+        match repo.find_reference(remote_branch) {
             Ok(mut r) => {
                 fast_forward(repo, &mut r, fetch_commit)?;
             }
@@ -253,12 +181,12 @@ pub fn do_merge<'a>(
                 // commit directly. Usually this is because you are pulling
                 // into an empty repository.
                 repo.reference(
-                    &remote_branch,
+                    remote_branch,
                     fetch_commit.id(),
                     true,
                     &format!("Setting {} to {}", remote_branch, fetch_commit.id()),
                 )?;
-                repo.set_head(&remote_branch)?;
+                repo.set_head(remote_branch)?;
                 repo.checkout_head(Some(
                     git2::build::CheckoutBuilder::default()
                         .allow_conflicts(true)

@@ -12,37 +12,26 @@ concurrency:
 
 jobs:
   release:
-    name: Release Packaging
-    env:
-      PROJECT_NAME: blog
+    name: release ${{ matrix.target }}
     runs-on: ubuntu-latest
-    container:
-      image: rust:alpine
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-gnu
+            archive: zip
+          - target: x86_64-unknown-linux-musl
+            archive: tar.gz tar.xz tar.zst
+          - target: x86_64-apple-darwin
+            archive: zip
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: install deps
-        run: apk update && apk add --no-cache musl-dev gpgme-dev openssl-dev openssl-libs-static libgit2-dev libgit2-static zlib-dev zlib-static tar
-
-      - uses: Swatinem/rust-cache@v2
-      
-      - name: Release Build
-        run: cargo build --release
-        env:
-          OPENSSL_STATIC: "1"
-          OPENSSL_LIB_DIR: /usr/lib
-          OPENSSL_INCLUDE_DIR: /usr/include/openssl
-          ZLIB_STATIC: "1"
-          ZLIB_LIB_DIR: /usr/lib
-          ZLIB_INCLUDE_DIR: /usr/include/
-          LIBGIT2_STATIC: "1"
-          SYSTEM_DEPS_LINK: static
-
       - uses: actions/upload-artifact@v3
         if: github.ref == 'refs/heads/mistress'
         with:
           name: dotfox
-          path: target/release/dotfox
+          path: |
+            ${{ steps.compile.outputs.BUILT_ARCHIVE }}
+            ${{ steps.compile.outputs.BUILT_CHECKSUM }}
 
       - name: Publish
         id: publishing
@@ -50,5 +39,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           files: |
-           target/release/dotfox
+            ${{ steps.compile.outputs.BUILT_ARCHIVE }}
+            ${{ steps.compile.outputs.BUILT_CHECKSUM }}
           draft: true

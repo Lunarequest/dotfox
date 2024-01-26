@@ -7,16 +7,17 @@ homepage = "https://github.com/Lunarequest/dotfox/"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.4.12", features = ["derive"] }
+clap = { version = "4.4.18", features = ["derive"] }
 dirs = "5.0.1"
 git2 = "0.18.1"
 gpgme = { version = "0.11.0", features = ["v1_18"] }
-serde = { version = "1.0.194", features = ["derive"] }
-serde_json = "1.0.110"
+serde = { version = "1.0.195", features = ["derive"] }
+serde_json = "1.0.111"
 owo-colors = { version = "4.0.0", features = ["alloc", "supports-color", "supports-colors"] }
 tabled = "0.15.0"
 platform-info = "2.0.2"
 anyhow = "1.0.79"
+git2_credentials = "0.13.0"
 
 [profile.release]
 lto = true

@@ -58,6 +58,7 @@ pub fn push(path: &Path, message: String) -> Result<()> {
     }
 
     commit::sign_commit_or_regular(&repo, &message)?;
+    println!("commit made time to push");
     push::git_push(&repo)?;
     Ok(())
 }

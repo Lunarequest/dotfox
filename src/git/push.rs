@@ -16,7 +16,6 @@ pub fn git_push(repo: &Repository) -> Result<()> {
         .map_err(|_| git2::Error::from_str("failed to resolve remote origin"))?;
 
     let mut push_options = PushOptions::new();
-
     remote.push(
         &[&format!("refs/heads/{}", head.shorthand().unwrap())],
         Some(&mut push_options),

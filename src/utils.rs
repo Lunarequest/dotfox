@@ -39,7 +39,7 @@ pub fn print_info(msg: String) {
     );
 }
 
-pub fn push(path: &Path, message: String) -> Result<()> {
+pub fn commit(path: &Path, message: String) -> Result<()> {
     let repo = Repository::open(path).context(format!(
         "unable to open repo {} is it really a git repo?",
         path.display()
@@ -53,12 +53,42 @@ pub fn push(path: &Path, message: String) -> Result<()> {
     let statuses = repo.statuses(Some(&mut status_opts))?;
 
     if statuses.is_empty() {
-        print_error("No files to commit".to_string());
+        print_error("No files to commit ".to_string());
         exit(1);
     }
 
     commit::sign_commit_or_regular(&repo, &message)?;
-    println!("commit made time to push");
+    Ok(())
+}
+
+pub fn push(path: &Path, message: Option<String>) -> Result<()> {
+    let repo = Repository::open(path).context(format!(
+        "unable to open repo {} is it really a git repo?",
+        path.display()
+    ))?;
+
+    set_current_dir(path)?;
+    add::git_add(&repo)?;
+
+    let mut status_opts = StatusOptions::default();
+
+    let statuses = repo.statuses(Some(&mut status_opts))?;
+    let out_of_sync = commit::unsynced_commits(&repo);
+
+    if statuses.is_empty() && !out_of_sync {
+        print_error("No files to commit or out of sync commits".to_string());
+        exit(1);
+    }
+
+    if !statuses.is_empty() && message.is_some() {
+        commit::sign_commit_or_regular(&repo, &message.unwrap())?;
+    } else if !out_of_sync {
+        eprintln!(
+            "commit message should have been passed as there are no commits that are out of sync"
+        );
+        exit(1);
+    }
+
     push::git_push(&repo)?;
     Ok(())
 }

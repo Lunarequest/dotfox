@@ -1,7 +1,7 @@
 use crate::utils::{print_error, print_info};
-use anyhow::{anyhow, Result};
-use git2::{build::CheckoutBuilder, AnnotatedCommit, Config, Cred, Reference, Repository};
-use gpgme::Context;
+use anyhow::{anyhow, Context, Result};
+use git2::{build::CheckoutBuilder, AnnotatedCommit, Config, Reference, Repository};
+use git2_credentials::CredentialHandler;
 
 fn fast_forward(repo: &Repository, lb: &mut Reference, rc: AnnotatedCommit) -> Result<()> {
     let name = match lb.name() {
@@ -23,18 +23,12 @@ pub fn do_fetch<'a>(
     remote: &'a mut git2::Remote,
 ) -> Result<git2::AnnotatedCommit<'a>> {
     let mut cb = git2::RemoteCallbacks::new();
+    let config = Config::open_default().context("failed to open gitconfig")?;
+    let mut ch = CredentialHandler::new(config);
 
-    let url = remote
-        .url()
-        .ok_or(git2::Error::from_str("Unable to get remote url"))?;
-    if url.starts_with("git@") {
-        cb.credentials(|_, _, _| {
-            let creds =
-                Cred::ssh_key_from_agent("git").expect("Could not create credentials object");
-            Ok(creds)
-        });
-    }
-
+    cb.credentials(move |url, username, allowed_types| {
+        ch.try_next_credential(url, username, allowed_types)
+    });
     // Print out our transfer progress.
     cb.transfer_progress(|stats| {
         if stats.received_objects() == stats.total_objects() {
@@ -126,7 +120,7 @@ fn normal_merge(
             )?)
             .to_string();
 
-            let mut ctx = Context::from_protocol(gpgme::Protocol::OpenPgp)?;
+            let mut ctx = gpgme::Context::from_protocol(gpgme::Protocol::OpenPgp)?;
             ctx.set_armor(true);
             let gpg_key = ctx.get_secret_key(&key)?;
 

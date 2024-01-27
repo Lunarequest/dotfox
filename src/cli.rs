@@ -24,6 +24,13 @@ pub enum Commands {
         #[clap(help = "path to repo, defaults to repositry name")]
         path: Option<PathBuf>,
     },
+    #[clap(about = "commit without pushing")]
+    Commit {
+        #[clap(short = 'm', long = "message", help = "message for commit")]
+        message: String,
+        #[clap(help = "path to repo, optional defaults to current dir")]
+        path: Option<PathBuf>,
+    },
     #[clap(about = "sync repo to home directory")]
     Sync {
         #[clap(help = "path to repo, optional defaults to current dir")]
@@ -31,8 +38,13 @@ pub enum Commands {
     },
     #[clap(about = "commit and push changes")]
     Push {
-        #[clap(short = 'm', long = "message", help = "message for commit")]
-        message: String,
+        #[clap(
+            short = 'm',
+            long = "message",
+            help = "message for commit",
+            required = false
+        )]
+        message: Option<String>,
         #[clap(help = "path to repo, optional defaults to current dir")]
         path: Option<PathBuf>,
     },

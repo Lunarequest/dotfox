@@ -14,8 +14,15 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 pub struct Programs {
     os: Option<String>,
-    hostname: Option<String>,
+    hostname: Option<Hostname>,
     folder: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum Hostname {
+    Single(String),
+    Multiple(Vec<String>),
 }
 
 impl Config {
@@ -34,8 +41,17 @@ impl Config {
             } else if program.os.is_none() {
                 let targethost = program.hostname;
                 if let Some(target) = targethost {
-                    if current_hostname == target {
-                        folders.append(&mut vec![program.folder]);
+                    match target {
+                        Hostname::Single(host) => {
+                            if host == current_hostname {
+                                folders.append(&mut vec![program.folder]);
+                            }
+                        }
+                        Hostname::Multiple(hosts) => {
+                            if hosts.contains(&current_hostname.to_string()) {
+                                folders.append(&mut vec![program.folder]);
+                            }
+                        }
                     }
                 }
             } else if program.hostname.is_none() {
@@ -50,8 +66,19 @@ impl Config {
                 let targethost = program.hostname;
                 if let Some(targetos) = targetos {
                     if let Some(target) = targethost {
-                        if current_hostname == target && current_os == targetos {
-                            folders.append(&mut vec![program.folder]);
+                        if current_os == targetos {
+                            match target {
+                                Hostname::Single(host) => {
+                                    if host == current_hostname {
+                                        folders.append(&mut vec![program.folder]);
+                                    }
+                                }
+                                Hostname::Multiple(hosts) => {
+                                    if hosts.contains(&current_hostname.to_string()) {
+                                        folders.append(&mut vec![program.folder]);
+                                    }
+                                }
+                            }
                         }
                     }
                 }

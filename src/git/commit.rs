@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context as anyhowContext, Result};
-use git2::{Commit, Config, ObjectType, Repository};
+use git2::{Commit, Config, FetchOptions, ObjectType, RemoteCallbacks, Repository};
+use git2_credentials::CredentialHandler;
 use gpgme::Context;
 
 fn find_last_commit(repo: &Repository) -> Result<Commit, git2::Error> {
@@ -63,4 +64,51 @@ pub fn sign_commit_or_regular(repo: &Repository, message: &str) -> Result<()> {
         }
     };
     Ok(())
+}
+
+pub fn unsynced_commits(repo: &Repository) -> bool {
+    let local_head = match repo.head() {
+        Ok(head) => match head.peel_to_commit() {
+            Ok(commit) => commit,
+            Err(e) => {
+                eprintln!("{e}");
+                return false;
+            }
+        },
+        Err(e) => {
+            eprintln!("{e}");
+            return false;
+        }
+    };
+    let config = match git2::Config::open_default() {
+        Ok(config) => config,
+        Err(_) => {
+            eprintln!("Failed to open gitconfig");
+            return false;
+        }
+    };
+
+    let mut fetch_opts = FetchOptions::new();
+    let mut callbacks = RemoteCallbacks::new();
+    let mut cred_handler = CredentialHandler::new(config);
+    callbacks.credentials(move |url, username, allowed_types| {
+        cred_handler.try_next_credential(url, username, allowed_types)
+    });
+    fetch_opts.remote_callbacks(callbacks);
+
+    let mut remote = repo.find_remote("origin").unwrap();
+    remote
+        .fetch(
+            &["refs/heads/*:refs/remotes/origin/*"],
+            Some(&mut fetch_opts),
+            None,
+        )
+        .unwrap();
+
+    let remote_head = repo
+        .find_reference("refs/remotes/origin/HEAD")
+        .unwrap()
+        .peel_to_commit()
+        .unwrap();
+    local_head.id() != remote_head.id()
 }

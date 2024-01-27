@@ -12,36 +12,39 @@ concurrency:
 
 jobs:
   release:
-    name: release ${{ matrix.target }}
+    name: Release Packaging
+    env:
+      PROJECT_NAME: blog
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: x86_64-pc-windows-gnu
-            archive: zip
-          - target: x86_64-unknown-linux-musl
-            archive: tar.gz tar.xz tar.zst
-          - target: x86_64-apple-darwin
-            archive: zip
+    container:
+      image: rust:alpine
     steps:
       - uses: actions/checkout@v4
-      - name: Compile
-        id: compile
-        uses: rust-build/rust-build.action@v1.4.4
-        with:
-          RUSTTARGET: x86_64-unknown-linux-musl
-          UPLOAD_MODE: none
 
-      - name: Upload arifacts
-        id: upload
-        uses: actions/upload-artifact@v3
+      - name: install deps
+        run:
+          apk update && apk upgrade && apk add musl-dev libgpg-error-dev libgpg-error-static libassuan-dev libassuan-static http-parser-dev gpg \
+          gpgme gpgme-dev openssl-dev openssl-libs-static libgit2-dev libgit2-static zlib-dev zlib-static
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Release Build
+        run: cargo build --release
+        env:
+          OPENSSL_STATIC: "1"
+          OPENSSL_LIB_DIR: /usr/lib
+          OPENSSL_INCLUDE_DIR: /usr/include/openssl
+          ZLIB_STATIC: "1"
+          ZLIB_LIB_DIR: /usr/lib
+          ZLIB_INCLUDE_DIR: /usr/include/
+          LIBGIT2_STATIC: "1"
+          SYSTEM_DEPS_LINK: static
+
+      - uses: actions/upload-artifact@v3
         if: github.ref == 'refs/heads/mistress'
         with:
           name: dotfox
-          path: |
-            ${{ steps.compile.outputs.BUILT_ARCHIVE }}
-            ${{ steps.compile.outputs.BUILT_CHECKSUM }}
+          path: target/release/dotfox
 
       - name: Publish
         id: publishing
@@ -49,6 +52,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           files: |
-            ${{ steps.compile.outputs.BUILT_ARCHIVE }}
-            ${{ steps.compile.outputs.BUILT_CHECKSUM }}
+            target/release/dotfox
           draft: true

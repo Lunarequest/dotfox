@@ -10,7 +10,8 @@ use super::{
 };
 use anyhow::{anyhow, Context, Result};
 use dirs::{config_dir, home_dir};
-use git2::{build::RepoBuilder, Cred, FetchOptions, RemoteCallbacks, Repository, StatusOptions};
+use git2::{build::RepoBuilder, FetchOptions, RemoteCallbacks, Repository, StatusOptions};
+use git2_credentials::CredentialHandler;
 use owo_colors::{OwoColorize, Stream::Stdout, Style};
 use serde_json::from_reader;
 use std::{
@@ -97,18 +98,13 @@ pub fn clone(url: String, path: &Path) -> Result<()> {
     let mut builder = RepoBuilder::new();
     let mut callbacks = RemoteCallbacks::new();
     let mut fetch_options = FetchOptions::new();
+    let config = git2::Config::open_default().context("unable to open gitconfig")?;
+    let mut ch = CredentialHandler::new(config);
 
-    // ssh
-    if url.starts_with("git@") {
-        callbacks.credentials(|_, _, _| {
-            let creds =
-                Cred::ssh_key_from_agent("git").expect("Could not create credentials object");
-            Ok(creds)
-        });
-        fetch_options.remote_callbacks(callbacks);
-    } else {
-        fetch_options.remote_callbacks(callbacks);
-    }
+    callbacks.credentials(move |url, username, allowed_types| {
+        ch.try_next_credential(url, username, allowed_types)
+    });
+    fetch_options.remote_callbacks(callbacks);
 
     builder.fetch_options(fetch_options);
     builder

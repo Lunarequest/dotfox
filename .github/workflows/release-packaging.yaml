@@ -20,10 +20,9 @@ jobs:
       image: rust:alpine
     steps:
       - uses: actions/checkout@v4
-
       - name: install deps
         run:
-          apk update && apk upgrade && apk add musl-dev libgpg-error-dev libgpg-error-static libassuan-dev libassuan-static http-parser-dev gpg \
+          apk update && apk upgrade && apk add musl-dev libgpg-error-dev libgpg-error-static libassuan-dev libassuan-static http-parser http-parser-dev gpg \
           gpgme gpgme-dev openssl-dev openssl-libs-static libgit2-dev libgit2-static zlib-dev zlib-static
 
       - uses: Swatinem/rust-cache@v2

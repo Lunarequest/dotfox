@@ -1,3 +1,5 @@
+use crate::map::VerifyMap;
+
 use super::{
     config::Config,
     git::{
@@ -16,10 +18,9 @@ use owo_colors::{OwoColorize, Stream::Stdout, Style};
 use serde_json::from_reader;
 use std::{
     env::set_current_dir,
-    fs::{read_dir, OpenOptions},
+    fs::{canonicalize, read_dir, OpenOptions},
     os::unix::fs::symlink,
     path::{Path, PathBuf},
-    process::exit,
     vec,
 };
 use tabled::Table;
@@ -54,8 +55,7 @@ pub fn commit(path: &Path, message: String) -> Result<()> {
     let statuses = repo.statuses(Some(&mut status_opts))?;
 
     if statuses.is_empty() {
-        print_error("No files to commit ".to_string());
-        exit(1);
+        return Err(anyhow!("No files to commit "));
     }
 
     commit::sign_commit_or_regular(&repo, &message)?;
@@ -77,17 +77,15 @@ pub fn push(path: &Path, message: Option<String>) -> Result<()> {
     let out_of_sync = commit::unsynced_commits(&repo);
 
     if statuses.is_empty() && !out_of_sync {
-        print_error("No files to commit or out of sync commits".to_string());
-        exit(1);
+        return Err(anyhow!("No files to commit or out of sync commits"));
     }
 
     if !statuses.is_empty() && message.is_some() {
         commit::sign_commit_or_regular(&repo, &message.unwrap())?;
     } else if !out_of_sync {
-        eprintln!(
+        return Err(anyhow!(
             "commit message should have been passed as there are no commits that are out of sync"
-        );
-        exit(1);
+        ));
     }
 
     push::git_push(&repo)?;
@@ -117,8 +115,7 @@ pub fn sync_config(path: PathBuf) -> Result<Vec<(PathBuf, PathBuf)>> {
     let config_dir = match config_dir() {
         Some(config) => config,
         None => {
-            print_error("Unable to resolve xdg-config".to_string());
-            exit(1);
+            return Err(anyhow!("Unable to resolve xdg-config"));
         }
     };
     let files = read_dir(path).expect("unable to read given path");
@@ -252,5 +249,82 @@ pub fn pull(path: &PathBuf) -> Result<()> {
     let branch = get_current_branch(&repo).unwrap();
     let fetch_commit = do_fetch(&repo, &[&branch], &mut remote)?;
     do_merge(&repo, &branch, fetch_commit)?;
+    Ok(())
+}
+
+pub fn verify(path: &PathBuf) -> Result<()> {
+    let home_dir = home_dir().context("unable to resolve home directory")?;
+    let config_path = path.join("dotfox.json");
+
+    if !config_path.exists() || config_path.is_dir() {
+        return Err(anyhow!(
+            "path for config {} does not exist",
+            config_path.display()
+        ));
+    }
+
+    let config_reader = OpenOptions::new()
+        .read(true)
+        .open(config_path)
+        .context("Failed to read config, does the path exist?")?;
+
+    let config: Config = from_reader(config_reader)?;
+
+    let mut files = config.folders()?;
+    let mut sync_files: Vec<(PathBuf, PathBuf)> = vec![];
+    let mut table: Vec<VerifyMap> = vec![];
+
+    files.sort();
+    files.dedup();
+
+    print_info("Resolving symlinks".to_string());
+
+    for dir in files {
+        let dir = path.join(dir);
+        if !dir.is_dir() {
+            return Err(anyhow!("Path {} is not a direcotory", dir.display()));
+        }
+        let in_files = read_dir(dir).unwrap();
+
+        for inner_file in in_files {
+            match inner_file {
+                Err(_e) =>
+                {
+                    #[cfg(debug_assertions)]
+                    print_error(_e.to_string())
+                }
+                Ok(file) => {
+                    let filename = file.file_name();
+                    let file = file.path();
+                    if filename == *".config" {
+                        let mut f = sync_config(file)?;
+                        sync_files.append(&mut f);
+                    } else {
+                        let target = home_dir.join(filename);
+                        sync_files.append(&mut vec![(file, target)])
+                    }
+                }
+            }
+        }
+    }
+
+    if !sync_files.is_empty() {
+        for file in &sync_files {
+            let mut map = VerifyMap::new(&file.0, &file.1);
+            let resolved_target = canonicalize(&file.1)?;
+
+            if &file.0 != &resolved_target {
+                map.taint();
+            }
+            table.append(&mut vec![map])
+        }
+
+        let table = Table::new(&table).to_string();
+
+        println!("{}", table.if_supports_color(Stdout, |text| text.bold()));
+    } else {
+        return Err(anyhow!("there are no files to sync"));
+    }
+
     Ok(())
 }

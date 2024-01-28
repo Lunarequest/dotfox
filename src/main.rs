@@ -3,7 +3,7 @@ use clap::Parser;
 use cli::Commands;
 use git2::Repository;
 use std::{fs::create_dir_all, path::PathBuf, process::exit};
-use utils::{clone, commit, print_error, print_info, pull, push, sync};
+use utils::{clone, commit, print_error, print_info, pull, push, sync, verify};
 mod cli;
 mod config;
 mod git;
@@ -91,6 +91,11 @@ fn main() -> Result<()> {
             let path = resolve_dir(path)?;
             pull(&path)?;
             sync(&path)?;
+            Ok(())
+        }
+        Commands::Verify { path } => {
+            let path = resolve_dir(path)?;
+            verify(&path)?;
             Ok(())
         }
     }

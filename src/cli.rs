@@ -24,7 +24,7 @@ pub enum Commands {
         #[clap(help = "path to repo, defaults to repositry name")]
         path: Option<PathBuf>,
     },
-    #[clap(about = "commit without pushing")]
+    #[clap(about = "commit all uncommited files")]
     Commit {
         #[clap(short = 'm', long = "message", help = "message for commit")]
         message: String,
@@ -50,6 +50,11 @@ pub enum Commands {
     },
     #[clap(about = "pull & sync changes from the git repo")]
     Pull {
+        #[clap(help = "path to repo, optional defaults to current dir")]
+        path: Option<PathBuf>,
+    },
+    #[clap(about = "verify integrity of all symlinks")]
+    Verify {
         #[clap(help = "path to repo, optional defaults to current dir")]
         path: Option<PathBuf>,
     },

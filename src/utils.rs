@@ -253,7 +253,7 @@ pub fn pull(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub fn verify(path: &PathBuf) -> Result<()> {
+pub fn verify(path: &Path) -> Result<()> {
     let home_dir = home_dir().context("unable to resolve home directory")?;
     let config_path = path.join("dotfox.json");
 
@@ -322,7 +322,7 @@ pub fn verify(path: &PathBuf) -> Result<()> {
                     PathBuf::from("not linked")
                 }
             };
-            if &file.0 != &resolved_target {
+            if file.0 != resolved_target {
                 map.taint();
             }
             table.append(&mut vec![map])

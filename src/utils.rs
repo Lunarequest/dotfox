@@ -19,6 +19,7 @@ use serde_json::from_reader;
 use std::{
     env::set_current_dir,
     fs::{canonicalize, read_dir, OpenOptions},
+    io::ErrorKind,
     os::unix::fs::symlink,
     path::{Path, PathBuf},
     vec,
@@ -296,7 +297,7 @@ pub fn verify(path: &PathBuf) -> Result<()> {
                 Ok(file) => {
                     let filename = file.file_name();
                     let file = file.path();
-                    if filename == *".config" {
+                    if filename.to_string_lossy() == ".config" {
                         let mut f = sync_config(file)?;
                         sync_files.append(&mut f);
                     } else {
@@ -308,11 +309,19 @@ pub fn verify(path: &PathBuf) -> Result<()> {
         }
     }
 
+    println!("{:#?}", sync_files);
     if !sync_files.is_empty() {
         for file in &sync_files {
             let mut map = VerifyMap::new(&file.0, &file.1);
-            let resolved_target = canonicalize(&file.1)?;
-
+            let resolved_target = match canonicalize(&file.1) {
+                Ok(t) => t,
+                Err(e) => {
+                    if e.kind() != ErrorKind::NotFound {
+                        return Err(anyhow!("{e}"));
+                    }
+                    PathBuf::from("not linked")
+                }
+            };
             if &file.0 != &resolved_target {
                 map.taint();
             }

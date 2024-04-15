@@ -1,5 +1,3 @@
-use crate::map::VerifyMap;
-
 use super::{
     config::Config,
     git::{
@@ -10,6 +8,7 @@ use super::{
     },
     map::Map,
 };
+use crate::map::VerifyMap;
 use anyhow::{anyhow, Context, Result};
 use dirs::{config_dir, home_dir};
 use git2::{build::RepoBuilder, FetchOptions, RemoteCallbacks, Repository, StatusOptions};

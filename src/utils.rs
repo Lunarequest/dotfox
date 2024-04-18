@@ -308,7 +308,6 @@ pub fn verify(path: &Path) -> Result<()> {
         }
     }
 
-    println!("{:#?}", sync_files);
     if !sync_files.is_empty() {
         for file in &sync_files {
             let mut map = VerifyMap::new(&file.0, &file.1);
@@ -318,6 +317,7 @@ pub fn verify(path: &Path) -> Result<()> {
                     if e.kind() != ErrorKind::NotFound {
                         return Err(anyhow!("{e}"));
                     }
+                    map.taint();
                     PathBuf::from("not linked")
                 }
             };

@@ -55,7 +55,7 @@
           dotfox = {
             program = self.packages.dotfox;
           };
-          defaultApp = dotfox;
+          defaultApp = self.apps.dotfox;
         };
       });
 }

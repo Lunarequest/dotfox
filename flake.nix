@@ -53,7 +53,6 @@
 
         apps = {
           dotfox = {
-            type = "dotfox";
             program = self.packages.dotfox;
           };
           defaultApp = dotfox;

@@ -3,7 +3,7 @@ use git2::{Commit, Config, FetchOptions, ObjectType, RemoteCallbacks, Repository
 use git2_credentials::CredentialHandler;
 use gpgme::Context;
 
-fn find_last_commit(repo: &Repository) -> Result<Commit, git2::Error> {
+fn find_last_commit(repo: &Repository) -> Result<Commit<'_>, git2::Error> {
     let obj = repo.head()?.resolve()?.peel(ObjectType::Commit)?;
     obj.into_commit()
         .map_err(|_| git2::Error::from_str("Couldn't find commit"))

@@ -61,7 +61,7 @@ fn main() -> Result<()> {
             let path = match path {
                 Some(path) => path,
                 None => {
-                    let base = match url.split('/').last() {
+                    let base = match url.split('/').next_back() {
                         Some(s) => s.replace(".git", ""),
                         None => {
                             print_error("not valid url".to_string());

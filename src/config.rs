@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use platform_info::{PlatformInfo, PlatformInfoAPI, UNameAPI};
 use serde::Deserialize;
 use std::{
@@ -56,28 +56,27 @@ impl Config {
                 }
             } else if program.hostname.is_none() {
                 let targetos = program.os;
-                if let Some(targetos) = targetos {
-                    if current_os == targetos {
-                        folders.append(&mut vec![program.folder]);
-                    }
+                if let Some(targetos) = targetos
+                    && current_os == targetos
+                {
+                    folders.append(&mut vec![program.folder]);
                 }
             } else {
                 let targetos = program.os;
                 let targethost = program.hostname;
-                if let Some(targetos) = targetos {
-                    if let Some(target) = targethost {
-                        if current_os == targetos {
-                            match target {
-                                Hostname::Single(host) => {
-                                    if host == current_hostname {
-                                        folders.append(&mut vec![program.folder]);
-                                    }
-                                }
-                                Hostname::Multiple(hosts) => {
-                                    if hosts.contains(&current_hostname.to_string()) {
-                                        folders.append(&mut vec![program.folder]);
-                                    }
-                                }
+                if let Some(targetos) = targetos
+                    && let Some(target) = targethost
+                    && current_os == targetos
+                {
+                    match target {
+                        Hostname::Single(host) => {
+                            if host == current_hostname {
+                                folders.append(&mut vec![program.folder]);
+                            }
+                        }
+                        Hostname::Multiple(hosts) => {
+                            if hosts.contains(&current_hostname.to_string()) {
+                                folders.append(&mut vec![program.folder]);
                             }
                         }
                     }

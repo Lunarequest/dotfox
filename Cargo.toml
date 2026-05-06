@@ -1,27 +1,27 @@
 [package]
 name = "dotfox"
 version = "0.5.1"
-edition = "2021"
+edition = "2024"
 homepage = "https://github.com/Lunarequest/dotfox/"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 clap = { version = "4.5.23", features = ["derive"] }
-dirs = "5.0.1"
-git2 = "0.19.0"
+dirs = "6.0.0"
+git2 = "0.20.4"
 gpgme = { version = "0.11.0", features = ["v1_18"] }
 serde = { version = "1.0.216", features = ["derive"] }
 serde_json = "1.0.133"
-owo-colors = { version = "4.1.0", features = [
+owo-colors = { version = "4.3.0", features = [
   "alloc",
   "supports-color",
   "supports-colors",
 ] }
-tabled = "0.17.0"
+tabled = "0.20.0"
 platform-info = "2.0.4"
 anyhow = "1.0.94"
-git2_credentials = "0.14.0"
+git2_credentials = "0.15.0"
 
 [profile.release]
 lto = true

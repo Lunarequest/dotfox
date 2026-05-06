@@ -80,8 +80,8 @@ pub fn push(path: &Path, message: Option<String>) -> Result<()> {
         return Err(anyhow!("No files to commit or out of sync commits"));
     }
 
-    if !statuses.is_empty() && message.is_some() {
-        commit::sign_commit_or_regular(&repo, &message.unwrap())?;
+    if let Some(msg) = message && !statuses.is_empty() {
+        commit::sign_commit_or_regular(&repo, &msg)?;
     } else if !out_of_sync {
         return Err(anyhow!(
             "commit message should have been passed as there are no commits that are out of sync"

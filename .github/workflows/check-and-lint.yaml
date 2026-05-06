@@ -19,7 +19,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustc-codegen-cranelift-preview
-      - run: sudo apt install -y libgpgme-dev
+      - run: sudo apt install -y libgpgme-dev clang mold
       - run: cargo check
 
   fmt:
@@ -38,9 +38,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy, rustc-codegen-cranelift-preview
       - uses: Swatinem/rust-cache@v2
-      - run: sudo apt install -y libgpgme-dev
+      - run: sudo apt install -y libgpgme-dev clang mold
       - run: cargo clippy --all-features

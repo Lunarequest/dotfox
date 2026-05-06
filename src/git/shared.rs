@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use git2::Repository;
 
 //exit code 2 means that it was not able to resolve the branch name

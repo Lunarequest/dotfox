@@ -1,6 +1,6 @@
 use crate::utils::{print_error, print_info};
-use anyhow::{anyhow, Context, Result};
-use git2::{build::CheckoutBuilder, AnnotatedCommit, Config, Reference, Repository};
+use anyhow::{Context, Result, anyhow};
+use git2::{AnnotatedCommit, Config, Reference, Repository, build::CheckoutBuilder};
 use git2_credentials::CredentialHandler;
 
 fn fast_forward(repo: &Repository, lb: &mut Reference, rc: AnnotatedCommit) -> Result<()> {

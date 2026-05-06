@@ -9,15 +9,15 @@ use super::{
     map::Map,
 };
 use crate::map::VerifyMap;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use dirs::{config_dir, home_dir};
-use git2::{build::RepoBuilder, FetchOptions, RemoteCallbacks, Repository, StatusOptions};
+use git2::{FetchOptions, RemoteCallbacks, Repository, StatusOptions, build::RepoBuilder};
 use git2_credentials::CredentialHandler;
 use owo_colors::{OwoColorize, Stream::Stdout, Style};
 use serde_json::from_reader;
 use std::{
     env::set_current_dir,
-    fs::{canonicalize, read_dir, OpenOptions},
+    fs::{OpenOptions, canonicalize, read_dir},
     io::ErrorKind,
     os::unix::fs::symlink,
     path::{Path, PathBuf},
@@ -80,7 +80,9 @@ pub fn push(path: &Path, message: Option<String>) -> Result<()> {
         return Err(anyhow!("No files to commit or out of sync commits"));
     }
 
-    if let Some(msg) = message && !statuses.is_empty() {
+    if let Some(msg) = message
+        && !statuses.is_empty()
+    {
         commit::sign_commit_or_regular(&repo, &msg)?;
     } else if !out_of_sync {
         return Err(anyhow!(

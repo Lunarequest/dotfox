@@ -37,7 +37,7 @@ jobs:
           LIBGIT2_STATIC: "1"
           SYSTEM_DEPS_LINK: static
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v7
         if: github.ref == 'refs/heads/mistress'
         with:
           name: dotfox

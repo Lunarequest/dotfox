@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context as anyhowContext, Result};
+use anyhow::{Context as anyhowContext, Result, anyhow};
 use git2::{Commit, Config, FetchOptions, ObjectType, RemoteCallbacks, Repository};
 use git2_credentials::CredentialHandler;
 use gpgme::Context;
